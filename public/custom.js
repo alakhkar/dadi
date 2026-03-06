@@ -66,17 +66,12 @@
     }
     if (!container || container === document.body) container = form.parentElement;
 
-    // Lay it out as a centered row
-    container.style.cssText = [
-      'display:flex',
-      'flex-direction:row',
-      'align-items:center',
-      'justify-content:center',
-      'gap:3rem',
-      'min-height:100vh',
-      'padding:2rem',
-      'background:#ffffff',
-    ].join(';');
+    // Lay it out as a centered row — set individual props to preserve Tailwind classes
+    container.style.flexDirection = 'row';
+    container.style.justifyContent = 'center';
+    container.style.alignItems = 'center';
+    container.style.gap = '3rem';
+    container.style.background = '#ffffff';
 
     // Image column
     const imgCol = document.createElement('div');
