@@ -107,7 +107,11 @@ def _upload_chunks(chunks: list) -> bool:
 
 def _retrieve(query: str, k: int = 3) -> list[Document]:
     """Call the match_dadi_knowledge RPC function directly via REST."""
-    embedding = EMBEDDINGS.embed_query(query)
+    try:
+        embedding = EMBEDDINGS.embed_query(query)
+    except Exception as e:
+        print(f"[RAG] Embedding failed: {e} — skipping retrieval.")
+        return []
     url = f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge"
     payload = {
         "query_embedding": embedding,
