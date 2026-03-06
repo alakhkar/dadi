@@ -10,7 +10,7 @@ load_dotenv()
 import httpx
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -48,7 +48,11 @@ def get_data_layer():
 # 3. EMBEDDINGS + LLM SINGLETONS
 # ─────────────────────────────────────────────
 print("[Startup] Loading embeddings model...")
-EMBEDDINGS = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+EMBEDDINGS = HuggingFaceInferenceAPIEmbeddings(
+    api_key=HUGGINGFACE_API_KEY,
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+)
 
 LLM = ChatGroq(
     model="llama-3.1-8b-instant",
