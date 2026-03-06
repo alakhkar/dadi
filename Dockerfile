@@ -7,5 +7,7 @@ RUN pip install --no-cache-dir --prefer-binary -r requirements.txt
 
 COPY . .
 
+RUN chmod +x start.sh
+
 EXPOSE 8000
-CMD ["sh", "-c", "chainlit run app.py --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["./start.sh"]
