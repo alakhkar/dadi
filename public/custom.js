@@ -300,4 +300,6 @@
   setTimeout(tryInject, 800);
   setTimeout(tryInject, 1500);
   setTimeout(tryInject, 3000);
+  setTimeout(tryInject, 5000);
+  setTimeout(tryInject, 8000);
 })();
