@@ -278,6 +278,7 @@ def header_auth_callback(headers: dict):
 @cl.action_callback("signup")
 async def on_signup(action: cl.Action):
     await action.remove()
+    cl.user_session.set("in_auth_flow", True)
 
     # Step 1: ask for email
     email_res = await cl.AskUserMessage(
@@ -289,11 +290,13 @@ async def on_signup(action: cl.Action):
     ).send()
 
     if not email_res:
+        cl.user_session.set("in_auth_flow", False)
         await cl.Message(content="Koi baat nahi beta, jab mann kare tab aa jaana.", author="Dadi 👵🏾").send()
         return
 
     email = email_res["output"].strip().lower()
     if "@" not in email or "." not in email.split("@")[-1]:
+        cl.user_session.set("in_auth_flow", False)
         await cl.Message(
             content="Arre beta, ye toh sahi email nahi lagti! Dobara try karo.",
             author="Dadi 👵🏾",
@@ -326,6 +329,7 @@ async def on_signup(action: cl.Action):
     ).send()
 
     if not otp_res:
+        cl.user_session.set("in_auth_flow", False)
         await cl.Message(content="Time ho gaya beta! Signup karna ho toh phir try karo.", author="Dadi 👵🏾").send()
         return
 
@@ -333,6 +337,7 @@ async def on_signup(action: cl.Action):
 
     # Step 4: verify
     if not _verify_otp(email, entered):
+        cl.user_session.set("in_auth_flow", False)
         await cl.Message(
             content="Galat code beta! Phir se try karo — 'Sign Up' button dobara click karo.",
             author="Dadi 👵🏾",
@@ -344,7 +349,8 @@ async def on_signup(action: cl.Action):
     cl.user_session.set("registered_email", email)
     memories = _get_memories(email)
     cl.user_session.set("memories", memories)
-    cl.user_session.set("popup_shown", True)  # don't show nudge again
+    cl.user_session.set("popup_shown", True)
+    cl.user_session.set("in_auth_flow", False)
 
     await cl.Message(
         content=(
@@ -370,6 +376,7 @@ async def on_start():
     cl.user_session.set("popup_shown", False)
     cl.user_session.set("registered_email", None)
     cl.user_session.set("memories", [])
+    cl.user_session.set("in_auth_flow", False)
 
     greeting = (
         "*beta!* Finally you remembered your Dadi exists, haan?\n\n"
@@ -381,6 +388,10 @@ async def on_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
+    # Skip LLM during auth flow (email/OTP inputs handled by on_signup)
+    if cl.user_session.get("in_auth_flow", False):
+        return
+
     user_text = message.content
     messages  = cl.user_session.get("messages", [])
     messages.append({"role": "user", "content": user_text})
