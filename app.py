@@ -273,84 +273,9 @@ def header_auth_callback(headers: dict):
 @cl.action_callback("signup")
 async def on_signup(action: cl.Action):
     await action.remove()
-    cl.user_session.set("in_auth_flow", True)
-
-    # Step 1: ask for email
-    email_res = await cl.AskUserMessage(
-        content=(
-            "Beta, apna email bata — Dadi wahan ek code bhejegi! "
-            "(Type your email address)"
-        ),
-        timeout=120,
-    ).send()
-
-    if not email_res:
-        cl.user_session.set("in_auth_flow", False)
-        await cl.Message(content="Koi baat nahi beta, jab mann kare tab aa jaana.", author="Dadi 👵🏾").send()
-        return
-
-    email = email_res["output"].strip().lower()
-    if "@" not in email or "." not in email.split("@")[-1]:
-        cl.user_session.set("in_auth_flow", False)
-        await cl.Message(
-            content="Arre beta, ye toh sahi email nahi lagti! Dobara try karo.",
-            author="Dadi 👵🏾",
-        ).send()
-        return
-
-    # Step 2: generate + send OTP
-    code = _generate_otp()
-    if not _save_otp(email, code):
-        await cl.Message(content="Kuch gadbad ho gayi beta, thodi der mein try karo.", author="Dadi 👵🏾").send()
-        return
-
-    sent = await _send_otp_email(email, code)
-    if not sent:
-        await cl.Message(
-            content="Email nahi gayi beta. Email sahi hai? Ek baar check karo.",
-            author="Dadi 👵🏾",
-        ).send()
-        return
-
+    cl.user_session.set("auth_state", "awaiting_email")
     await cl.Message(
-        content=f"Dadi ne `{email}` pe 6-digit code bheja! Check karo aur woh code yahan type karo.",
-        author="Dadi 👵🏾",
-    ).send()
-
-    # Step 3: ask for OTP
-    otp_res = await cl.AskUserMessage(
-        content="Code daalo beta (6 digits):",
-        timeout=300,
-    ).send()
-
-    if not otp_res:
-        cl.user_session.set("in_auth_flow", False)
-        await cl.Message(content="Time ho gaya beta! Signup karna ho toh phir try karo.", author="Dadi 👵🏾").send()
-        return
-
-    entered = otp_res["output"].strip()
-
-    # Step 4: verify
-    if not _verify_otp(email, entered):
-        cl.user_session.set("in_auth_flow", False)
-        await cl.Message(
-            content="Galat code beta! Phir se try karo — 'Sign Up' button dobara click karo.",
-            author="Dadi 👵🏾",
-        ).send()
-        return
-
-    # Step 5: logged in — load memories
-    cl.user_session.set("registered_email", email)
-    memories = _get_memories(email)
-    cl.user_session.set("memories", memories)
-    cl.user_session.set("popup_shown", True)
-    cl.user_session.set("in_auth_flow", False)
-
-    await cl.Message(
-        content=(
-            "Aa gaye beta! Dadi ne pehchaan liya. Ab sab yaad rahega — "
-            "teri baatein, tera naam, sab kuch. Bol, kya chal raha hai?"
-        ),
+        content="Beta, apna email bata — Dadi wahan ek code bhejegi! (Type your email address)",
         author="Dadi 👵🏾",
     ).send()
 
@@ -370,7 +295,8 @@ async def on_start():
     cl.user_session.set("popup_shown", False)
     cl.user_session.set("registered_email", None)
     cl.user_session.set("memories", [])
-    cl.user_session.set("in_auth_flow", False)
+    cl.user_session.set("auth_state", None)   # None | "awaiting_email" | "awaiting_otp"
+    cl.user_session.set("pending_email", None)
 
     greeting = (
         "*beta!* Finally you remembered your Dadi exists, haan?\n\n"
@@ -382,9 +308,55 @@ async def on_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    # Skip LLM during auth flow (email/OTP inputs handled by on_signup)
-    if cl.user_session.get("in_auth_flow", False):
+    auth_state = cl.user_session.get("auth_state")
+
+    # ── Auth state machine ──────────────────────
+    if auth_state == "awaiting_email":
+        email = message.content.strip().lower()
+        if "@" not in email or "." not in email.split("@")[-1]:
+            await cl.Message(content="Arre beta, ye sahi email nahi lagti! Dobara daalo.", author="Dadi 👵🏾").send()
+            return
+        code = _generate_otp()
+        if not _save_otp(email, code):
+            cl.user_session.set("auth_state", None)
+            await cl.Message(content="Kuch gadbad ho gayi beta, thodi der mein try karo.", author="Dadi 👵🏾").send()
+            return
+        sent = await _send_otp_email(email, code)
+        if not sent:
+            cl.user_session.set("auth_state", None)
+            await cl.Message(content="Email nahi gayi beta. Sahi email hai? Ek baar check karo.", author="Dadi 👵🏾").send()
+            return
+        cl.user_session.set("pending_email", email)
+        cl.user_session.set("auth_state", "awaiting_otp")
+        await cl.Message(
+            content=f"Dadi ne `{email}` pe code bheja! Woh 6-digit code yahan type karo.",
+            author="Dadi 👵🏾",
+        ).send()
         return
+
+    if auth_state == "awaiting_otp":
+        entered = message.content.strip()
+        email = cl.user_session.get("pending_email")
+        if not _verify_otp(email, entered):
+            await cl.Message(
+                content="Galat code beta! Dobara try karo, ya 'Sign Up' phir se click karo.",
+                author="Dadi 👵🏾",
+            ).send()
+            return
+        cl.user_session.set("auth_state", None)
+        cl.user_session.set("pending_email", None)
+        cl.user_session.set("registered_email", email)
+        cl.user_session.set("memories", _get_memories(email))
+        cl.user_session.set("popup_shown", True)
+        await cl.Message(
+            content=(
+                "Aa gaye beta! Dadi ne pehchaan liya. Ab sab yaad rahega — "
+                "tera naam, teri baatein, sab kuch. Bol, kya chal raha hai?"
+            ),
+            author="Dadi 👵🏾",
+        ).send()
+        return
+    # ── End auth state machine ──────────────────
 
     user_text = message.content
     messages  = cl.user_session.get("messages", [])
