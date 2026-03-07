@@ -296,8 +296,8 @@ async def on_message(message: cl.Message):
                     "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
                 ),
                 actions=[
-                    cl.Action(name="signup",        value="signup",        label="✨ Sign Up — Save My Chats"),
-                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest"),
+                    cl.Action(name="signup",         value="signup",         label="✨ Sign Up — Save My Chats", payload={"value": "signup"}),
+                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest",          payload={"value": "continue_guest"}),
                 ],
             ).send()
             print("[Nudge] Signup nudge sent successfully.")
