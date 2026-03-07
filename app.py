@@ -12,8 +12,11 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from prompt import DADI_SYSTEM_PROMPT
 
 # ─────────────────────────────────────────────
@@ -32,7 +35,7 @@ missing = [k for k, v in {
 }.items() if not v]
 
 if missing:
-    raise EnvironmentError(f"Missing env vars: {', '.join(missing)}")
+    raise EnvironmentError(f"❌ Missing env vars: {', '.join(missing)}")
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER (sidebar history)
@@ -59,7 +62,9 @@ LLM = ChatGroq(
 )
 
 # ─────────────────────────────────────────────
-# 4. SUPABASE REST HELPERS
+# 5. DIRECT SUPABASE REST HELPERS
+#    Bypasses SupabaseVectorStore entirely to avoid
+#    the 'params' attribute bug in newer supabase-py
 # ─────────────────────────────────────────────
 SUPA_HEADERS = {
     "apikey":        SUPABASE_KEY,
@@ -68,6 +73,7 @@ SUPA_HEADERS = {
 }
 
 def _has_knowledge() -> bool:
+    """Check if dadi_knowledge table has any rows."""
     try:
         url = f"{SUPABASE_URL}/rest/v1/dadi_knowledge?select=content&limit=1"
         r = httpx.get(url, headers=SUPA_HEADERS, timeout=10)
@@ -78,8 +84,10 @@ def _has_knowledge() -> bool:
 
 
 def _upload_chunks(chunks: list) -> bool:
+    """Insert document chunks with embeddings via REST."""
     url = f"{SUPABASE_URL}/rest/v1/dadi_knowledge"
     headers = {**SUPA_HEADERS, "Prefer": "return=minimal"}
+
     for i, chunk in enumerate(chunks):
         embedding = EMBEDDINGS.embed_query(chunk.page_content)
         payload = {
@@ -93,140 +101,102 @@ def _upload_chunks(chunks: list) -> bool:
             return False
         if i % 5 == 0:
             print(f"[RAG] Uploaded {i+1}/{len(chunks)} chunks...")
+
     return True
 
 
 def _retrieve(query: str, k: int = 3) -> list[Document]:
+    """Call the match_dadi_knowledge RPC function directly via REST."""
     try:
         embedding = EMBEDDINGS.embed_query(query)
     except Exception as e:
-        print(f"[RAG] Embedding failed: {e}")
+        print(f"[RAG] Embedding failed: {e} — skipping retrieval.")
         return []
     url = f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge"
-    payload = {"query_embedding": embedding, "match_count": k, "filter": {}}
+    payload = {
+        "query_embedding": embedding,
+        "match_count":     k,
+        "filter":          {},
+    }
     r = httpx.post(url, headers=SUPA_HEADERS, json=payload, timeout=15)
     if r.status_code != 200:
         print(f"[RAG] Retrieval failed: {r.text}")
         return []
-    return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
+
+    results = r.json()
+    return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in results]
 
 
 # ─────────────────────────────────────────────
-# 5. MEMORY HELPERS
+# 6. BUILD RAG CHAIN
 # ─────────────────────────────────────────────
-def _get_memories(user_id: str) -> list[str]:
+RAG_CHAIN = None
+
+def build_rag_chain():
+    global RAG_CHAIN
+    if RAG_CHAIN is not None:
+        return RAG_CHAIN
+
     try:
-        url = (
-            f"{SUPABASE_URL}/rest/v1/user_memories"
-            f"?user_id=eq.{user_id}&select=memory&order=created_at.desc&limit=20"
-        )
-        r = httpx.get(url, headers=SUPA_HEADERS, timeout=10)
-        if r.status_code == 200:
-            return [row["memory"] for row in r.json()]
-    except Exception as e:
-        print(f"[Memory] Failed to load: {e}")
-    return []
+        if not _has_knowledge():
+            pdf_path = "dadi_knowledge.pdf"
+            if not os.path.exists(pdf_path):
+                print("[RAG] No PDF found — falling back to plain LLM.")
+                return None
 
+            print("[RAG] Uploading PDF to Supabase...")
+            loader = PyPDFLoader(pdf_path)
+            docs   = loader.load()
+            chunks = RecursiveCharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=200
+            ).split_documents(docs)
 
-def _save_memory(user_id: str, memory: str):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/user_memories"
-        headers = {**SUPA_HEADERS, "Prefer": "return=minimal"}
-        r = httpx.post(url, headers=headers, json={"user_id": user_id, "memory": memory}, timeout=10)
-        if r.status_code not in (200, 201):
-            print(f"[Memory] Save failed: {r.text}")
-    except Exception as e:
-        print(f"[Memory] Save error: {e}")
-
-
-async def _extract_and_save_memories(user_id: str, messages: list):
-    """Use LLM to extract key facts from conversation and persist them."""
-    if len(messages) < 4:
-        return
-    convo = "\n".join(
-        f"{'User' if m['role'] == 'user' else 'Dadi'}: {m['content'][:300]}"
-        for m in messages[-10:]
-    )
-    extraction_prompt = (
-        "From this conversation, extract 1-3 short, specific facts about the USER "
-        "that Dadi should remember for future conversations "
-        "(e.g. their name, job, city, family situation, a problem they shared, preferences).\n\n"
-        "Only extract facts clearly stated by the user. "
-        "Return ONLY a JSON array of strings, nothing else.\n"
-        'Example: ["Name is Riya", "Works at a startup in Bangalore", "Has an exam next week"]\n'
-        "If nothing worth remembering, return: []\n\n"
-        f"Conversation:\n{convo}"
-    )
-    try:
-        response = await LLM.ainvoke([HumanMessage(content=extraction_prompt)])
-        text = response.content.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        facts = json.loads(text.strip())
-        for fact in facts[:3]:
-            if isinstance(fact, str) and len(fact) > 5:
-                _save_memory(user_id, fact)
-                print(f"[Memory] Saved: {fact}")
-    except Exception as e:
-        print(f"[Memory] Extraction failed: {e}")
-
-
-# ─────────────────────────────────────────────
-# 6. RAG — ENSURE PDF UPLOADED ON STARTUP
-# ─────────────────────────────────────────────
-def ensure_knowledge_uploaded():
-    try:
-        if _has_knowledge():
-            print("[RAG] Knowledge already in Supabase ✓")
-            return
-        pdf_path = "dadi_knowledge.pdf"
-        if not os.path.exists(pdf_path):
-            print("[RAG] No PDF found — RAG disabled.")
-            return
-        print("[RAG] Uploading PDF to Supabase...")
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-        chunks = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=200
-        ).split_documents(docs)
-        if _upload_chunks(chunks):
+            success = _upload_chunks(chunks)
+            if not success:
+                print("[RAG] Upload failed — falling back to plain LLM.")
+                return None
             print(f"[RAG] Uploaded {len(chunks)} chunks ✓")
         else:
-            print("[RAG] Upload failed.")
+            print("[RAG] Knowledge already in Supabase ✓")
+
+        # Build LCEL chain with our custom retriever
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", DADI_SYSTEM_PROMPT + "\n\nDadi's ancient knowledge (use only if relevant):\n{context}"),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{input}"),
+        ])
+
+        RAG_CHAIN = (
+            {
+                "context": RunnableLambda(lambda x: "\n\n".join(
+                    d.page_content for d in _retrieve(x["input"])
+                )),
+                "input":   RunnableLambda(lambda x: x["input"]),
+                "history": RunnableLambda(lambda x: x["history"]),
+            }
+            | prompt
+            | LLM
+            | StrOutputParser()
+        )
+        print("[RAG] Chain ready ✓")
+        return RAG_CHAIN
+
     except Exception as e:
-        print(f"[RAG] Startup error: {e}")
+        print(f"[RAG] Chain build failed: {e} — using plain LLM.")
+        return None
 
 
 print("[Startup] Building Dadi's brain...")
-ensure_knowledge_uploaded()
+build_rag_chain()
 
 
 # ─────────────────────────────────────────────
-# 7. AUTH
+# 7. AUTH — auto guest, no login page
 # ─────────────────────────────────────────────
 @cl.header_auth_callback
 def header_auth_callback(headers: dict):
-    """Auto-create a guest user so visitors land directly in chat."""
     guest_id = f"guest_{uuid.uuid4().hex[:8]}"
     return cl.User(identifier=guest_id, metadata={"role": "guest"})
-
-
-@cl.oauth_callback
-def oauth_callback(provider_id: str, token: str, raw_user_data: dict, default_user: cl.User):
-    """Handle Google sign-in for persistent accounts."""
-    if provider_id == "google":
-        return cl.User(
-            identifier=raw_user_data["email"],
-            metadata={
-                "role":     "user",
-                "provider": "google",
-                "name":     raw_user_data.get("name", ""),
-                "picture":  raw_user_data.get("picture", ""),
-            },
-        )
-    return default_user
 
 
 # ─────────────────────────────────────────────
@@ -237,10 +207,9 @@ async def on_signup(action: cl.Action):
     await action.remove()
     await cl.Message(
         content=(
-            "Beta, ek kaam kar — click here to sign in with Google:\n\n"
-            "👉 **[Sign in with Google](/login)**\n\n"
-            "Ek baar sign in kar lo, phir Dadi sab yaad rakhegi — "
-            "tera naam, teri baatein, sab. Promise. 💛"
+            "🙏 Theek hai beta! Sign-up is coming very soon.\n\n"
+            "For now, keep chatting — Dadi isn't going anywhere. "
+            "We'll let you know the moment accounts are ready!"
         ),
         author="Dadi 👵🏾",
     ).send()
@@ -260,27 +229,10 @@ async def on_start():
     cl.user_session.set("response_count", 0)
     cl.user_session.set("popup_shown", False)
 
-    user = cl.user_session.get("user")
-    is_guest = not user or user.metadata.get("role") == "guest"
-
-    memories = []
-    if not is_guest:
-        memories = _get_memories(user.identifier)
-    cl.user_session.set("memories", memories)
-
-    if not is_guest and memories:
-        first_name = (user.metadata.get("name") or "").split()[0]
-        name_part = first_name if first_name else "beta"
-        greeting = (
-            f"*Arre, {name_part}!* Aagaye finally! Dadi yaad karti thi...\n\n"
-            "Chal bata, kya chal raha hai? *Bol.*"
-        )
-    else:
-        greeting = (
-            "*beta!* Finally you remembered your Dadi exists, haan?\n\n"
-            "Dadi is here. *Chalo, bol.*"
-        )
-
+    greeting = (
+        "*beta!* 👵🏾 Finally you remembered your Dadi exists, haan?\n\n"
+        "Dadi is here. *Chalo, bol.*"
+    )
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
     cl.user_session.set("messages", [{"role": "assistant", "content": greeting}])
 
@@ -304,34 +256,17 @@ async def on_message(message: cl.Message):
             else:
                 history_msgs.append(AIMessage(content=m["content"]))
 
-        # Memories injected into system prompt
-        memories = cl.user_session.get("memories", [])
-        memory_section = ""
-        if memories:
-            memory_section = (
-                "\n\n---\nWhat Dadi remembers about this person "
-                "(weave naturally into conversation, don't recite all at once):\n"
-                + "\n".join(f"- {m}" for m in memories)
-            )
+        if RAG_CHAIN:
+            async for token in RAG_CHAIN.astream({"input": user_text, "history": history_msgs}):
+                full_reply += token
+                await msg.stream_token(token)
+        else:
+            llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT)] + history_msgs
+            llm_msgs.append(HumanMessage(content=user_text))
 
-        # RAG context
-        rag_context = ""
-        try:
-            docs = _retrieve(user_text)
-            if docs:
-                rag_context = (
-                    "\n\n---\nDadi's ancient knowledge (use only if relevant):\n"
-                    + "\n\n".join(d.page_content for d in docs)
-                )
-        except Exception as e:
-            print(f"[RAG] Retrieval error: {e}")
-
-        full_system = DADI_SYSTEM_PROMPT + memory_section + rag_context
-        llm_msgs = [SystemMessage(content=full_system)] + history_msgs + [HumanMessage(content=user_text)]
-
-        async for chunk in LLM.astream(llm_msgs):
-            full_reply += chunk.content
-            await msg.stream_token(chunk.content)
+            async for chunk in LLM.astream(llm_msgs):
+                full_reply += chunk.content
+                await msg.stream_token(chunk.content)
 
     except Exception as e:
         full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
@@ -342,37 +277,27 @@ async def on_message(message: cl.Message):
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
 
-    # Show signup nudge after 2nd response (guests only)
-    user = cl.user_session.get("user")
-    is_guest = not user or user.metadata.get("role") == "guest"
+    # Show signup nudge after 2nd response
     response_count = cl.user_session.get("response_count", 0) + 1
     cl.user_session.set("response_count", response_count)
     popup_shown = cl.user_session.get("popup_shown", False)
+    print(f"[Nudge] response_count={response_count} popup_shown={popup_shown}")
 
-    if is_guest and response_count == 2 and not popup_shown:
+    if response_count == 2 and not popup_shown:
         cl.user_session.set("popup_shown", True)
+        print("[Nudge] Sending signup nudge message...")
         try:
             await cl.Message(
                 content=(
-                    "Dadi won't remember you next time.\n\n"
+                    "💛 **Dadi won't remember you next time.**\n\n"
                     "Right now you're chatting as a guest — your conversations vanish when you leave. "
                     "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
                 ),
                 actions=[
-                    cl.Action(name="signup",         value="signup",         label="Sign Up with Google", payload={"value": "signup"}),
-                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest",   payload={"value": "continue_guest"}),
+                    cl.Action(name="signup",         value="signup",         label="✨ Sign Up — Save My Chats", payload={"value": "signup"}),
+                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest",          payload={"value": "continue_guest"}),
                 ],
             ).send()
+            print("[Nudge] Signup nudge sent successfully.")
         except Exception as e:
-            print(f"[Nudge] Failed: {e}")
-
-
-@cl.on_chat_end
-async def on_end():
-    """Extract and save memories for signed-in users when session ends."""
-    user = cl.user_session.get("user")
-    if not user or user.metadata.get("role") == "guest":
-        return
-    messages = cl.user_session.get("messages", [])
-    print(f"[Memory] Extracting memories for {user.identifier}...")
-    await _extract_and_save_memories(user.identifier, messages)
+            print(f"[Nudge] Failed to send nudge: {e}")
