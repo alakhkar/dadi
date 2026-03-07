@@ -149,13 +149,6 @@ def _verify_otp(email: str, code: str) -> bool:
     return True
 
 
-def _ensure_user(email: str):
-    """Insert user row if not already exists."""
-    url = f"{SUPABASE_URL}/rest/v1/dadi_users"
-    headers = {**SUPA_HEADERS, "Prefer": "resolution=ignore-duplicates,return=minimal"}
-    r = httpx.post(url, headers=headers, json={"email": email}, timeout=10)
-    if r.status_code not in (200, 201):
-        print(f"[Auth] User insert status={r.status_code} body={r.text}")
 
 
 async def _send_otp_email(email: str, code: str) -> bool:
@@ -347,7 +340,6 @@ async def on_signup(action: cl.Action):
         return
 
     # Step 5: logged in — load memories
-    _ensure_user(email)
     cl.user_session.set("registered_email", email)
     memories = _get_memories(email)
     cl.user_session.set("memories", memories)
