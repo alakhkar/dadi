@@ -55,7 +55,7 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
 )
 
 LLM = ChatGroq(
-    model="llama-3.1-8b-instant",
+    model="qwen3-32b",
     api_key=GROQ_API_KEY,
     temperature=0.8,
     streaming=True,
