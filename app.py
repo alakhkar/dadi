@@ -200,7 +200,28 @@ def header_auth_callback(headers: dict):
 
 
 # ─────────────────────────────────────────────
-# 8. CHAINLIT HANDLERS
+# 8. ACTION CALLBACKS
+# ─────────────────────────────────────────────
+@cl.action_callback("signup")
+async def on_signup(action: cl.Action):
+    await action.remove()
+    await cl.Message(
+        content=(
+            "🙏 Theek hai beta! Sign-up is coming very soon.\n\n"
+            "For now, keep chatting — Dadi isn't going anywhere. "
+            "We'll let you know the moment accounts are ready!"
+        ),
+        author="Dadi 👵🏾",
+    ).send()
+
+
+@cl.action_callback("continue_guest")
+async def on_continue_guest(action: cl.Action):
+    await action.remove()
+
+
+# ─────────────────────────────────────────────
+# 9. CHAINLIT HANDLERS
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
@@ -265,25 +286,14 @@ async def on_message(message: cl.Message):
 
     if response_count == 2 and not popup_shown:
         cl.user_session.set("popup_shown", True)
-        res = await cl.AskActionMessage(
+        await cl.Message(
             content=(
                 "💛 **Dadi won't remember you next time.**\n\n"
                 "Right now you're chatting as a guest — your conversations vanish when you leave. "
                 "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
             ),
             actions=[
-                cl.Action(name="signup",  value="signup",  label="✨ Sign Up — Save My Chats"),
-                cl.Action(name="guest",   value="guest",   label="Continue as Guest"),
+                cl.Action(name="signup",       label="✨ Sign Up — Save My Chats"),
+                cl.Action(name="continue_guest", label="Continue as Guest"),
             ],
-            timeout=600,
         ).send()
-
-        if res and res.get("value") == "signup":
-            await cl.Message(
-                content=(
-                    "🙏 Theek hai beta! Sign-up is coming very soon.\n\n"
-                    "For now, keep chatting — Dadi isn't going anywhere. "
-                    "We'll let you know the moment accounts are ready!"
-                ),
-                author="Dadi 👵🏾",
-            ).send()
