@@ -445,9 +445,17 @@ async def on_message(message: cl.Message):
         # Refresh memories in session
         cl.user_session.set("memories", _get_memories(registered_email))
 
-    # Show signup nudge after 2nd response for guests only
+    # Detect signup intent in user message
+    signup_keywords = {"sign up", "signup", "register", "save my chat", "remember me",
+                       "create account", "log in", "login", "save conversations"}
+    user_wants_signup = any(kw in user_text.lower() for kw in signup_keywords)
+
+    # Show signup nudge: after 2nd response, or any time user asks about it
     popup_shown = cl.user_session.get("popup_shown", False)
-    if not registered_email and response_count == 2 and not popup_shown:
+    if not registered_email and (
+        (response_count == 2 and not popup_shown) or
+        (user_wants_signup and popup_shown)
+    ):
         cl.user_session.set("popup_shown", True)
         try:
             await cl.Message(
