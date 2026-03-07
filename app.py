@@ -283,17 +283,23 @@ async def on_message(message: cl.Message):
     response_count = cl.user_session.get("response_count", 0) + 1
     cl.user_session.set("response_count", response_count)
     popup_shown = cl.user_session.get("popup_shown", False)
+    print(f"[Nudge] response_count={response_count} popup_shown={popup_shown}")
 
     if response_count == 2 and not popup_shown:
         cl.user_session.set("popup_shown", True)
-        await cl.Message(
-            content=(
-                "💛 **Dadi won't remember you next time.**\n\n"
-                "Right now you're chatting as a guest — your conversations vanish when you leave. "
-                "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
-            ),
-            actions=[
-                cl.Action(name="signup",       label="✨ Sign Up — Save My Chats"),
-                cl.Action(name="continue_guest", label="Continue as Guest"),
-            ],
-        ).send()
+        print("[Nudge] Sending signup nudge message...")
+        try:
+            await cl.Message(
+                content=(
+                    "💛 **Dadi won't remember you next time.**\n\n"
+                    "Right now you're chatting as a guest — your conversations vanish when you leave. "
+                    "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
+                ),
+                actions=[
+                    cl.Action(name="signup",        value="signup",        label="✨ Sign Up — Save My Chats"),
+                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest"),
+                ],
+            ).send()
+            print("[Nudge] Signup nudge sent successfully.")
+        except Exception as e:
+            print(f"[Nudge] Failed to send nudge: {e}")
