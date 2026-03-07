@@ -128,7 +128,8 @@ def _save_otp(email: str, code: str) -> bool:
 
 
 def _verify_otp(email: str, code: str) -> bool:
-    now = datetime.now(timezone.utc).isoformat()
+    # Use UTC time formatted without +00:00 suffix to avoid URL encoding issues
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
     url = (
         f"{SUPABASE_URL}/rest/v1/otp_codes"
         f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1"
