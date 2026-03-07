@@ -230,9 +230,7 @@ async def on_start():
     cl.user_session.set("popup_shown", False)
 
     greeting = (
-        "*Arre beta!* 👵🏾 Finally you remembered your Dadi exists, haan?\n\n"
-        "Come, sit down. Put that phone away for two seconds. "
-        "Tell me everything — what problem has life given you today? "
+        "*beta!* 👵🏾 Finally you remembered your Dadi exists, haan?\n\n"
         "Dadi is here. *Chalo, bol.*"
     )
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
