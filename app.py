@@ -191,16 +191,12 @@ build_rag_chain()
 
 
 # ─────────────────────────────────────────────
-# 7. AUTH
+# 7. AUTH — auto guest, no login page
 # ─────────────────────────────────────────────
-@cl.password_auth_callback
-def auth_callback(username: str, password: str):
-    if password == "dadi":
-        return cl.User(identifier=username, metadata={"role": "user"})
-    if password == "guest":
-        guest_id = f"guest_{uuid.uuid4().hex[:8]}"
-        return cl.User(identifier=guest_id, metadata={"role": "guest"})
-    return None
+@cl.header_auth_callback
+def header_auth_callback(headers: dict):
+    guest_id = f"guest_{uuid.uuid4().hex[:8]}"
+    return cl.User(identifier=guest_id, metadata={"role": "guest"})
 
 
 # ─────────────────────────────────────────────
@@ -209,8 +205,8 @@ def auth_callback(username: str, password: str):
 @cl.on_chat_start
 async def on_start():
     cl.user_session.set("messages", [])
-    user = cl.user_session.get("user")
-    is_guest = user and user.metadata.get("role") == "guest"
+    cl.user_session.set("response_count", 0)
+    cl.user_session.set("popup_shown", False)
 
     greeting = (
         "*Arre beta!* 👵🏾 Finally you remembered your Dadi exists, haan?\n\n"
@@ -220,12 +216,6 @@ async def on_start():
     )
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
     cl.user_session.set("messages", [{"role": "assistant", "content": greeting}])
-
-    if is_guest:
-        await cl.Message(
-            content="*(You are chatting as a guest — Dadi won't remember this conversation next time. Login to save your history.)*",
-            author="Dadi 👵🏾",
-        ).send()
 
 
 @cl.on_message
@@ -267,3 +257,33 @@ async def on_message(message: cl.Message):
 
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
+
+    # Show signup nudge after 2nd response
+    response_count = cl.user_session.get("response_count", 0) + 1
+    cl.user_session.set("response_count", response_count)
+    popup_shown = cl.user_session.get("popup_shown", False)
+
+    if response_count == 2 and not popup_shown:
+        cl.user_session.set("popup_shown", True)
+        res = await cl.AskActionMessage(
+            content=(
+                "💛 **Dadi won't remember you next time.**\n\n"
+                "Right now you're chatting as a guest — your conversations vanish when you leave. "
+                "Sign up so Dadi can remember your name, your stories, and pick up right where you left off."
+            ),
+            actions=[
+                cl.Action(name="signup",  value="signup",  label="✨ Sign Up — Save My Chats"),
+                cl.Action(name="guest",   value="guest",   label="Continue as Guest"),
+            ],
+            timeout=600,
+        ).send()
+
+        if res and res.get("value") == "signup":
+            await cl.Message(
+                content=(
+                    "🙏 Theek hai beta! Sign-up is coming very soon.\n\n"
+                    "For now, keep chatting — Dadi isn't going anywhere. "
+                    "We'll let you know the moment accounts are ready!"
+                ),
+                author="Dadi 👵🏾",
+            ).send()
