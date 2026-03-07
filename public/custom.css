@@ -1,0 +1,17 @@
+/* ── Dadi logo centered at top of chat window ── */
+
+/* Center the logo in the header toolbar */
+#header {
+  justify-content: center !important;
+}
+
+#header img {
+  height: 48px !important;
+  width: auto !important;
+  object-fit: contain;
+}
+
+/* Hide the app name text next to the logo so only image shows */
+#header .MuiTypography-root {
+  display: none !important;
+}
