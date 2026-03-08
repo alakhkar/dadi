@@ -1,7 +1,5 @@
 import chainlit as cl
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
-from chainlit.server import app as chainlit_app
-from fastapi.responses import RedirectResponse
 import os
 import json
 import uuid
@@ -264,31 +262,22 @@ ensure_knowledge_uploaded()
 # ─────────────────────────────────────────────
 # 8. AUTH — auto guest, no login page
 # ─────────────────────────────────────────────
-@chainlit_app.get("/activate-session")
-async def activate_session(email: str):
-    """Set a persistent cookie so header_auth_callback can identify returning users."""
-    redirect = RedirectResponse(url="/", status_code=302)
-    redirect.set_cookie(
-        key="dadi_user",
-        value=email,
-        max_age=365 * 24 * 3600,
-        httponly=False,
-        samesite="lax",
-        path="/",
-    )
-    return redirect
-
-
 @cl.header_auth_callback
 def header_auth_callback(headers: dict):
     cookie_header = headers.get("cookie", "")
+    dadi_user = None
+    dadi_guest = None
     for part in cookie_header.split(";"):
         part = part.strip()
         if part.startswith("dadi_user="):
-            email = unquote(part[len("dadi_user="):])
-            if email and "@" in email:
-                return cl.User(identifier=email, metadata={"role": "registered"})
-    guest_id = f"guest_{uuid.uuid4().hex[:8]}"
+            dadi_user = unquote(part[len("dadi_user="):])
+        elif part.startswith("dadi_guest="):
+            dadi_guest = part[len("dadi_guest="):]
+    # Returning registered user
+    if dadi_user and "@" in dadi_user:
+        return cl.User(identifier=dadi_user, metadata={"role": "registered"})
+    # Stable guest — same ID across reconnects so actions don't break
+    guest_id = dadi_guest if dadi_guest else f"guest_{uuid.uuid4().hex[:8]}"
     return cl.User(identifier=guest_id, metadata={"role": "guest"})
 
 

@@ -5,6 +5,31 @@
 (function () {
   const DADI_IMG = "/public/logo_dark.png";
 
+  /* ── Stable guest cookie — prevents "not authorized" on WebSocket reconnects ── */
+  function getCookie(name) {
+    return document.cookie.split(';').map(c => c.trim())
+      .find(c => c.startsWith(name + '='))?.split('=')[1] || null;
+  }
+  if (!getCookie('dadi_guest') && !getCookie('dadi_user')) {
+    const gid = 'guest_' + Math.random().toString(36).slice(2, 10);
+    document.cookie = `dadi_guest=${gid}; path=/; max-age=86400; SameSite=Lax`;
+  }
+
+  /* ── Intercept activation link clicks — set cookie client-side, clear old JWT, reload ── */
+  document.addEventListener('click', function (e) {
+    const link = e.target.closest('a');
+    if (!link) return;
+    let href = '';
+    try { href = new URL(link.href).pathname + new URL(link.href).search; } catch (_) { return; }
+    if (!href.startsWith('/activate-session')) return;
+    e.preventDefault();
+    const email = new URL(link.href).searchParams.get('email');
+    if (!email) return;
+    document.cookie = `dadi_user=${encodeURIComponent(email)}; path=/; max-age=31536000; SameSite=Lax`;
+    localStorage.removeItem('access_token');
+    window.location.href = '/';
+  }, true);
+
   /* ── Styles injected into <head> ── */
   const STYLES = `
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400;1,600&family=Lora:ital,wght@0,400;1,400&display=swap');
