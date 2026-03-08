@@ -3,6 +3,29 @@
    ══════════════════════════════════════════════ */
 (function () {
 
+  /* ── Loading overlay — hides login page flash while header auth completes ──
+     The logo (html::before, z-index 99999) shows above it, creating a branded
+     loading screen. Fades out once the chat textarea mounts. ── */
+  const overlay = document.createElement('div');
+  overlay.id = 'dadi-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:#FDF6F0;z-index:99998;';
+  document.documentElement.appendChild(overlay);
+
+  function fadeOverlay() {
+    overlay.style.transition = 'opacity 0.3s';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 350);
+  }
+
+  const overlayObs = new MutationObserver(() => {
+    if (document.querySelector('textarea')) {
+      fadeOverlay();
+      overlayObs.disconnect();
+    }
+  });
+  overlayObs.observe(document.body, { childList: true, subtree: true });
+  setTimeout(fadeOverlay, 3000); // hard fallback
+
   /* ── Stable guest cookie — prevents "not authorized" on WebSocket reconnects ── */
   function getCookie(name) {
     return document.cookie.split(';').map(c => c.trim())
