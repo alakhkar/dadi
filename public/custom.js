@@ -165,7 +165,7 @@
     const img = document.createElement('img');
     img.src = DADI_IMG;
     img.alt = 'Dadi';
-    img.style.cssText = 'height:48px;width:auto;object-fit:contain;display:block;';
+    img.style.cssText = 'height:72px;width:auto;object-fit:contain;display:block;';
     el.appendChild(img);
     document.documentElement.appendChild(el); // inject into <html>, not <body>
     console.log('[Dadi] Chat logo injected into <html>');

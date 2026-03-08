@@ -6,8 +6,8 @@ html::before {
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  width: 120px;
-  height: 48px;
+  width: 180px;
+  height: 72px;
   background-image: url('/public/logo_dark.png');
   background-size: contain;
   background-repeat: no-repeat;
