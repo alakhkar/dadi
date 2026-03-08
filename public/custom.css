@@ -8,7 +8,7 @@ html::before {
   transform: translateX(-50%);
   width: 120px;
   height: 48px;
-  background-image: url('/public/dadi.png');
+  background-image: url('/public/logo_dark.png');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

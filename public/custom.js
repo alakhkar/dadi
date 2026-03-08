@@ -3,7 +3,7 @@
    Injects Dadi image on login page + chat widget
    ══════════════════════════════════════════════ */
 (function () {
-  const DADI_IMG = "/public/dadi.png";
+  const DADI_IMG = "/public/logo_dark.png";
 
   /* ── Styles injected into <head> ── */
   const STYLES = `
