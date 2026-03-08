@@ -1,17 +1,25 @@
-/* ── Dadi logo centered at top of chat window ── */
-
-/* Center the logo in the header toolbar */
-#header {
-  justify-content: center !important;
+/* ── Dadi persistent top-center logo overlay ── */
+#dadi-chat-logo {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#header img {
-  height: 48px !important;
-  width: auto !important;
+#dadi-chat-logo img {
+  height: 48px;
+  width: auto;
   object-fit: contain;
+  display: block;
 }
 
-/* Hide the app name text next to the logo so only image shows */
+/* Hide the default Chainlit header logo/title so our overlay is the only one */
+#header img,
 #header .MuiTypography-root {
   display: none !important;
 }
