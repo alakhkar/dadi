@@ -158,7 +158,7 @@
     const el = document.createElement('div');
     el.id = 'dadi-chat-logo';
     el.style.cssText = [
-      'position:fixed', 'top:8px', 'left:50%', 'transform:translateX(-50%)',
+      'position:fixed', 'top:15px', 'left:50%', 'transform:translateX(-50%)',
       'z-index:99999', 'pointer-events:none', 'display:flex',
       'align-items:center', 'justify-content:center',
     ].join(';');
