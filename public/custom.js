@@ -248,9 +248,22 @@
       : submitBtn.parentNode.insertAdjacentElement('afterend', wrapper);
   }
 
+  /* ── Hide readme button wherever it appears ── */
+  function hideReadmeButton() {
+    // by href
+    document.querySelectorAll('a[href="/readme"], a[href*="readme"]').forEach(el => {
+      el.style.display = 'none';
+    });
+    // by text content
+    document.querySelectorAll('button, a').forEach(el => {
+      if (el.textContent.trim().toLowerCase() === 'readme') el.style.display = 'none';
+    });
+  }
+
   /* ── Route change cleanup ── */
   let lastPath = window.location.pathname;
   new MutationObserver(() => {
+    hideReadmeButton();
     if (window.location.pathname !== lastPath) {
       lastPath = window.location.pathname;
       removePanel();
