@@ -36,7 +36,28 @@
     document.cookie = `dadi_guest=${gid}; path=/; max-age=86400; SameSite=Lax`;
   }
 
-  /* ── Session activation link — set cookie client-side, clear old JWT, reload ── */
+  /* ── Session activation — auto-fires when Dadi's OTP success message appears ── */
+  function activateSession(email) {
+    document.cookie = `dadi_user=${encodeURIComponent(email)}; path=/; max-age=31536000; SameSite=Lax`;
+    localStorage.removeItem('access_token');
+    window.location.href = '/';
+  }
+
+  // Auto-detect activation link in chat messages and handle without user click
+  let activating = false;
+  new MutationObserver(() => {
+    if (activating) return;
+    const link = document.querySelector('a[href*="/activate-session"]');
+    if (!link) return;
+    try {
+      const email = new URL(link.href).searchParams.get('email');
+      if (!email) return;
+      activating = true;
+      setTimeout(() => activateSession(email), 1500); // brief delay so user reads Dadi's message
+    } catch (_) {}
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // Manual click fallback
   document.addEventListener('click', function (e) {
     const link = e.target.closest('a');
     if (!link) return;
@@ -45,10 +66,7 @@
       if (!url.pathname.startsWith('/activate-session')) return;
       e.preventDefault();
       const email = url.searchParams.get('email');
-      if (!email) return;
-      document.cookie = `dadi_user=${encodeURIComponent(email)}; path=/; max-age=31536000; SameSite=Lax`;
-      localStorage.removeItem('access_token');
-      window.location.href = '/';
+      if (email) activateSession(email);
     } catch (_) {}
   }, true);
 

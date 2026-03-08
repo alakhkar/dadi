@@ -310,8 +310,8 @@ async def on_message(message: cl.Message):
         await cl.Message(
             content=(
                 "Aa gaye beta! Dadi ne pehchaan liya. Ab sab yaad rahega — "
-                "tera naam, teri baatein, sab kuch.\n\n"
-                f"[**→ Click here to load your full chat history**](/activate-session?email={email})"
+                "tera naam, teri baatein, sab kuch. "
+                f"[Ek second, loading your history...](/activate-session?email={email})"
             ),
             author="Dadi 👵🏾",
         ).send()
