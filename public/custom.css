@@ -1,20 +1,22 @@
 /* ── Dadi persistent top-center logo ── */
 /* Attached to <html>, not <body> — immune to body transforms & React re-renders */
 html::before {
-  content: '';
-  position: fixed;
-  top: 15px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 180px;
-  height: 72px;
-  background-image: url('/public/logo_dark.png');
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  z-index: 99999;
-  pointer-events: none;
-  display: block;
+  content: '' !important;
+  position: fixed !important;
+  display: block !important;
+  top: 15px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 180px !important;
+  height: 72px !important;
+  background-image: url('/public/logo_dark.png') !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  z-index: 99999 !important;
+  pointer-events: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 /* Hide the Chainlit header logo/title to avoid duplicates */

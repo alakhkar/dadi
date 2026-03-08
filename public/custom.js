@@ -52,6 +52,23 @@
     } catch (_) {}
   }, true);
 
+  /* ── Persistent logo — re-inject into <html> if ever removed ── */
+  function ensureLogo() {
+    if (document.getElementById('dadi-chat-logo')) return;
+    const el = document.createElement('div');
+    el.id = 'dadi-chat-logo';
+    el.style.cssText = 'position:fixed;top:15px;left:50%;transform:translateX(-50%);z-index:99999;pointer-events:none;';
+    const img = document.createElement('img');
+    img.src = '/public/logo_dark.png';
+    img.alt = 'Dadi';
+    img.style.cssText = 'height:72px;width:auto;object-fit:contain;display:block;';
+    el.appendChild(img);
+    document.documentElement.appendChild(el);
+  }
+  ensureLogo();
+  // Watch direct children of <html> — re-inject if logo is removed
+  new MutationObserver(ensureLogo).observe(document.documentElement, { childList: true });
+
   /* ── Hide readme button ── */
   function hideReadmeButton() {
     document.querySelectorAll('a[href="/readme"], a[href*="readme"]').forEach(el => {
