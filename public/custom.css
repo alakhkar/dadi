@@ -1,24 +1,21 @@
-/* ── Dadi persistent top-center logo overlay ── */
-#dadi-chat-logo {
+/* ── Dadi persistent logo — pure CSS, immune to React re-renders ── */
+body::before {
+  content: '';
   position: fixed;
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
+  width: 120px;
+  height: 48px;
+  background-image: url('/public/dadi.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   z-index: 10000;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-#dadi-chat-logo img {
-  height: 48px;
-  width: auto;
-  object-fit: contain;
-  display: block;
-}
-
-/* Hide the default Chainlit header logo/title so our overlay is the only one */
+/* Hide the default Chainlit header logo/title to avoid duplication */
 #header img,
 #header .MuiTypography-root {
   display: none !important;
