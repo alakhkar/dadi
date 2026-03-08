@@ -22,3 +22,10 @@ html::before {
 #header .MuiTypography-root {
   display: none !important;
 }
+
+/* Hide the readme/book icon link in the chat window */
+a[href="/readme"],
+button[aria-label="Readme"],
+button[aria-label="readme"] {
+  display: none !important;
+}
