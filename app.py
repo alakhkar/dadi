@@ -1,11 +1,14 @@
 import chainlit as cl
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
+from chainlit.server import app as chainlit_app
+from fastapi.responses import RedirectResponse
 import os
 import json
 import uuid
 import random
 import string
 from datetime import datetime, timezone, timedelta
+from urllib.parse import unquote
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -261,8 +264,30 @@ ensure_knowledge_uploaded()
 # ─────────────────────────────────────────────
 # 8. AUTH — auto guest, no login page
 # ─────────────────────────────────────────────
+@chainlit_app.get("/activate-session")
+async def activate_session(email: str):
+    """Set a persistent cookie so header_auth_callback can identify returning users."""
+    redirect = RedirectResponse(url="/", status_code=302)
+    redirect.set_cookie(
+        key="dadi_user",
+        value=email,
+        max_age=365 * 24 * 3600,
+        httponly=False,
+        samesite="lax",
+        path="/",
+    )
+    return redirect
+
+
 @cl.header_auth_callback
 def header_auth_callback(headers: dict):
+    cookie_header = headers.get("cookie", "")
+    for part in cookie_header.split(";"):
+        part = part.strip()
+        if part.startswith("dadi_user="):
+            email = unquote(part[len("dadi_user="):])
+            if email and "@" in email:
+                return cl.User(identifier=email, metadata={"role": "registered"})
     guest_id = f"guest_{uuid.uuid4().hex[:8]}"
     return cl.User(identifier=guest_id, metadata={"role": "guest"})
 
@@ -292,11 +317,20 @@ async def on_continue_guest(action: cl.Action):
 async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
-    cl.user_session.set("popup_shown", False)
-    cl.user_session.set("registered_email", None)
-    cl.user_session.set("memories", [])
-    cl.user_session.set("auth_state", None)   # None | "awaiting_email" | "awaiting_otp"
+    cl.user_session.set("auth_state", None)
     cl.user_session.set("pending_email", None)
+
+    # If the user has the dadi_user cookie, they're already registered
+    user = cl.user_session.get("user")
+    if user and user.metadata.get("role") == "registered":
+        email = user.identifier
+        cl.user_session.set("registered_email", email)
+        cl.user_session.set("popup_shown", True)
+        cl.user_session.set("memories", _get_memories(email))
+    else:
+        cl.user_session.set("registered_email", None)
+        cl.user_session.set("popup_shown", False)
+        cl.user_session.set("memories", [])
 
     greeting = (
         "*beta!* Finally you remembered your Dadi exists, haan?\n\n"
@@ -351,7 +385,8 @@ async def on_message(message: cl.Message):
         await cl.Message(
             content=(
                 "Aa gaye beta! Dadi ne pehchaan liya. Ab sab yaad rahega — "
-                "tera naam, teri baatein, sab kuch. Bol, kya chal raha hai?"
+                "tera naam, teri baatein, sab kuch.\n\n"
+                f"[**→ Click here to load your full chat history**](/activate-session?email={email})"
             ),
             author="Dadi 👵🏾",
         ).send()
