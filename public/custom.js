@@ -152,6 +152,30 @@
     console.log('[Dadi] Login panel injected');
   }
 
+  /* ── Persistent chat logo injected into <html> — outside React's tree ── */
+  function injectChatLogo() {
+    if (document.getElementById('dadi-chat-logo')) return;
+    const el = document.createElement('div');
+    el.id = 'dadi-chat-logo';
+    el.style.cssText = [
+      'position:fixed', 'top:8px', 'left:50%', 'transform:translateX(-50%)',
+      'z-index:99999', 'pointer-events:none', 'display:flex',
+      'align-items:center', 'justify-content:center',
+    ].join(';');
+    const img = document.createElement('img');
+    img.src = DADI_IMG;
+    img.alt = 'Dadi';
+    img.style.cssText = 'height:48px;width:auto;object-fit:contain;display:block;';
+    el.appendChild(img);
+    document.documentElement.appendChild(el); // inject into <html>, not <body>
+    console.log('[Dadi] Chat logo injected into <html>');
+  }
+
+  function removeChatLogo() {
+    const el = document.getElementById('dadi-chat-logo');
+    if (el) el.remove();
+  }
+
   function removePanel() {
     const p = document.getElementById('dadi-right-panel');
     if (p) p.remove();
@@ -234,8 +258,10 @@
     if (isLoginPage()) {
       injectPanel();
       injectSkipButton();
+      removeChatLogo();
     } else {
       removePanel();
+      injectChatLogo();
     }
   }).observe(document.body, { childList: true, subtree: true });
 
@@ -244,8 +270,11 @@
     if (isLoginPage()) {
       injectPanel();
       injectSkipButton();
+      removeChatLogo();
+    } else {
+      injectChatLogo();
     }
-    if (document.getElementById('dadi-right-panel')) clearInterval(poll);
+    if (document.getElementById('dadi-right-panel') || document.getElementById('dadi-chat-logo')) clearInterval(poll);
   }, 200);
   setTimeout(() => clearInterval(poll), 10000);
 })();

@@ -1,5 +1,6 @@
-/* ── Dadi persistent logo — pure CSS, immune to React re-renders ── */
-body::before {
+/* ── Dadi persistent top-center logo ── */
+/* Attached to <html>, not <body> — immune to body transforms & React re-renders */
+html::before {
   content: '';
   position: fixed;
   top: 8px;
@@ -11,11 +12,12 @@ body::before {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  z-index: 10000;
+  z-index: 99999;
   pointer-events: none;
+  display: block;
 }
 
-/* Hide the default Chainlit header logo/title to avoid duplication */
+/* Hide the Chainlit header logo/title to avoid duplicates */
 #header img,
 #header .MuiTypography-root {
   display: none !important;
