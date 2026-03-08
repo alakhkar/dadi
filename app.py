@@ -23,22 +23,12 @@ from prompt import DADI_SYSTEM_PROMPT
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
 # ─────────────────────────────────────────────
-GROQ_API_KEY  = os.environ.get("GROQ_API_KEY")
-SUPABASE_URL  = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
-DATABASE_URL  = os.environ.get("DATABASE_URL")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")        # optional — prints code if missing
-EMAIL_FROM    = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
-
-missing = [k for k, v in {
-    "GROQ_API_KEY": GROQ_API_KEY,
-    "SUPABASE_URL": SUPABASE_URL,
-    "SUPABASE_KEY": SUPABASE_KEY,
-    "DATABASE_URL": DATABASE_URL,
-}.items() if not v]
-
-if missing:
-    raise EnvironmentError(f"Missing env vars: {', '.join(missing)}")
+GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
+SUPABASE_URL   = os.environ["SUPABASE_URL"]
+SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
+DATABASE_URL   = os.environ["DATABASE_URL"]
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+EMAIL_FROM     = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER
@@ -51,10 +41,9 @@ def get_data_layer():
 # 3. EMBEDDINGS + LLM
 # ─────────────────────────────────────────────
 print("[Startup] Loading embeddings model...")
-HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 EMBEDDINGS = HuggingFaceEndpointEmbeddings(
     model="sentence-transformers/all-MiniLM-L6-v2",
-    huggingfacehub_api_token=HUGGINGFACE_API_KEY,
+    huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
 )
 
 LLM = ChatGroq(
@@ -75,21 +64,18 @@ SUPA_HEADERS = {
 
 def _has_knowledge() -> bool:
     try:
-        url = f"{SUPABASE_URL}/rest/v1/dadi_knowledge?select=content&limit=1"
-        r = httpx.get(url, headers=SUPA_HEADERS, timeout=10)
+        r = httpx.get(f"{SUPABASE_URL}/rest/v1/dadi_knowledge?select=content&limit=1", headers=SUPA_HEADERS, timeout=10)
         return bool(r.json())
     except Exception as e:
         print(f"[RAG] Table check failed: {e}")
         return False
-
 
 def _upload_chunks(chunks: list) -> bool:
     url = f"{SUPABASE_URL}/rest/v1/dadi_knowledge"
     headers = {**SUPA_HEADERS, "Prefer": "return=minimal"}
     for i, chunk in enumerate(chunks):
         embedding = EMBEDDINGS.embed_query(chunk.page_content)
-        payload = {"content": chunk.page_content, "metadata": chunk.metadata, "embedding": embedding}
-        r = httpx.post(url, headers=headers, json=payload, timeout=30)
+        r = httpx.post(url, headers=headers, json={"content": chunk.page_content, "metadata": chunk.metadata, "embedding": embedding}, timeout=30)
         if r.status_code not in (200, 201):
             print(f"[RAG] Upload failed for chunk {i}: {r.text}")
             return False
@@ -97,21 +83,18 @@ def _upload_chunks(chunks: list) -> bool:
             print(f"[RAG] Uploaded {i+1}/{len(chunks)} chunks...")
     return True
 
-
 def _retrieve(query: str, k: int = 3) -> list[Document]:
     try:
         embedding = EMBEDDINGS.embed_query(query)
     except Exception as e:
         print(f"[RAG] Embedding failed: {e}")
         return []
-    url = f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge"
-    payload = {"query_embedding": embedding, "match_count": k, "filter": {}}
-    r = httpx.post(url, headers=SUPA_HEADERS, json=payload, timeout=15)
+    r = httpx.post(f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge", headers=SUPA_HEADERS,
+                   json={"query_embedding": embedding, "match_count": k, "filter": {}}, timeout=15)
     if r.status_code != 200:
         print(f"[RAG] Retrieval failed: {r.text}")
         return []
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
-
 
 # ─────────────────────────────────────────────
 # 5. OTP HELPERS
@@ -119,92 +102,71 @@ def _retrieve(query: str, k: int = 3) -> list[Document]:
 def _generate_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
-
 def _save_otp(email: str, code: str) -> bool:
     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    url = f"{SUPABASE_URL}/rest/v1/otp_codes"
-    headers = {**SUPA_HEADERS, "Prefer": "return=minimal"}
-    r = httpx.post(url, headers=headers, json={"email": email, "code": code, "expires_at": expires_at}, timeout=10)
+    r = httpx.post(f"{SUPABASE_URL}/rest/v1/otp_codes",
+                   headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+                   json={"email": email, "code": code, "expires_at": expires_at}, timeout=10)
     return r.status_code in (200, 201)
 
-
 def _verify_otp(email: str, code: str) -> bool:
-    # Use UTC time formatted without +00:00 suffix to avoid URL encoding issues
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
-    url = (
+    r = httpx.get(
         f"{SUPABASE_URL}/rest/v1/otp_codes"
-        f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1"
-    )
-    r = httpx.get(url, headers=SUPA_HEADERS, timeout=10)
+        f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
+        headers=SUPA_HEADERS, timeout=10)
     rows = r.json() if r.status_code == 200 else []
     if not rows:
         return False
-    # Mark as used
-    otp_id = rows[0]["id"]
-    httpx.patch(
-        f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{otp_id}",
-        headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-        json={"used": True},
-        timeout=10,
-    )
+    httpx.patch(f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{rows[0]['id']}",
+                headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+                json={"used": True}, timeout=10)
     return True
-
-
-
 
 async def _send_otp_email(email: str, code: str) -> bool:
     if not RESEND_API_KEY:
         print(f"[OTP] No RESEND_API_KEY — code for {email}: {code}")
-        return True  # dev mode: code printed to logs
-    r = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-        json={
-            "from": EMAIL_FROM,
-            "to":   [email],
-            "subject": "Your Dadi verification code",
-            "text": (
-                f"Your Dadi login code is: {code}\n\n"
-                "This code expires in 10 minutes.\n\n"
-                "If you didn't request this, ignore this email."
-            ),
-        },
-        timeout=15,
-    )
+        return True
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": EMAIL_FROM,
+                "to": [email],
+                "subject": "Your Dadi verification code",
+                "text": f"Your Dadi login code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, ignore this email.",
+            },
+            timeout=15,
+        )
     if r.status_code != 200:
         print(f"[OTP] Resend error: {r.text}")
         return False
     return True
-
 
 # ─────────────────────────────────────────────
 # 6. MEMORY HELPERS
 # ─────────────────────────────────────────────
 def _get_memories(email: str) -> list[str]:
     try:
-        url = (
-            f"{SUPABASE_URL}/rest/v1/user_memories"
-            f"?user_email=eq.{email}&select=memory&order=created_at.desc&limit=20"
-        )
-        r = httpx.get(url, headers=SUPA_HEADERS, timeout=10)
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/user_memories?user_email=eq.{email}&select=memory&order=created_at.desc&limit=20",
+            headers=SUPA_HEADERS, timeout=10)
         if r.status_code == 200:
             return [row["memory"] for row in r.json()]
     except Exception as e:
         print(f"[Memory] Load failed: {e}")
     return []
 
-
 def _save_memory(email: str, memory: str):
     try:
-        url = f"{SUPABASE_URL}/rest/v1/user_memories"
-        headers = {**SUPA_HEADERS, "Prefer": "return=minimal"}
-        httpx.post(url, headers=headers, json={"user_email": email, "memory": memory}, timeout=10)
+        httpx.post(f"{SUPABASE_URL}/rest/v1/user_memories",
+                   headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+                   json={"user_email": email, "memory": memory}, timeout=10)
     except Exception as e:
         print(f"[Memory] Save error: {e}")
 
-
 async def _extract_and_save_memories(email: str, messages: list):
-    """Ask LLM to extract key user facts from conversation and persist them."""
     if len(messages) < 4:
         return
     convo = "\n".join(
@@ -232,7 +194,6 @@ async def _extract_and_save_memories(email: str, messages: list):
     except Exception as e:
         print(f"[Memory] Extraction failed: {e}")
 
-
 # ─────────────────────────────────────────────
 # 7. RAG — ENSURE PDF UPLOADED ON STARTUP
 # ─────────────────────────────────────────────
@@ -246,40 +207,33 @@ def ensure_knowledge_uploaded():
             print("[RAG] No PDF found — RAG disabled.")
             return
         print("[RAG] Uploading PDF to Supabase...")
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
+        docs = PyPDFLoader(pdf_path).load()
         chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
         if _upload_chunks(chunks):
             print(f"[RAG] Uploaded {len(chunks)} chunks ✓")
     except Exception as e:
         print(f"[RAG] Startup error: {e}")
 
-
 print("[Startup] Building Dadi's brain...")
 ensure_knowledge_uploaded()
 
-
 # ─────────────────────────────────────────────
-# 8. AUTH — auto guest, no login page
+# 8. AUTH
 # ─────────────────────────────────────────────
 @cl.header_auth_callback
 def header_auth_callback(headers: dict):
-    cookie_header = headers.get("cookie", "")
     dadi_user = None
     dadi_guest = None
-    for part in cookie_header.split(";"):
+    for part in headers.get("cookie", "").split(";"):
         part = part.strip()
         if part.startswith("dadi_user="):
             dadi_user = unquote(part[len("dadi_user="):])
         elif part.startswith("dadi_guest="):
             dadi_guest = part[len("dadi_guest="):]
-    # Returning registered user
     if dadi_user and "@" in dadi_user:
         return cl.User(identifier=dadi_user, metadata={"role": "registered"})
-    # Stable guest — same ID across reconnects so actions don't break
     guest_id = dadi_guest if dadi_guest else f"guest_{uuid.uuid4().hex[:8]}"
     return cl.User(identifier=guest_id, metadata={"role": "guest"})
-
 
 # ─────────────────────────────────────────────
 # 9. ACTION CALLBACKS
@@ -288,16 +242,11 @@ def header_auth_callback(headers: dict):
 async def on_signup(action: cl.Action):
     await action.remove()
     cl.user_session.set("auth_state", "awaiting_email")
-    await cl.Message(
-        content="Beta, apna email bata — Dadi wahan ek code bhejegi! (Type your email address)",
-        author="Dadi 👵🏾",
-    ).send()
-
+    await cl.Message(content="Beta, apna email bata — Dadi wahan ek code bhejegi! (Type your email address)", author="Dadi 👵🏾").send()
 
 @cl.action_callback("continue_guest")
 async def on_continue_guest(action: cl.Action):
     await action.remove()
-
 
 # ─────────────────────────────────────────────
 # 10. CHAINLIT HANDLERS
@@ -309,22 +258,17 @@ async def on_start():
     cl.user_session.set("auth_state", None)
     cl.user_session.set("pending_email", None)
 
-    # If the user has the dadi_user cookie, they're already registered
-    user = cl.user_session.get("user")
+    user = cl.context.session.user
     if user and user.metadata.get("role") == "registered":
-        email = user.identifier
-        cl.user_session.set("registered_email", email)
+        cl.user_session.set("registered_email", user.identifier)
         cl.user_session.set("popup_shown", True)
-        cl.user_session.set("memories", _get_memories(email))
+        cl.user_session.set("memories", _get_memories(user.identifier))
     else:
         cl.user_session.set("registered_email", None)
         cl.user_session.set("popup_shown", False)
         cl.user_session.set("memories", [])
 
-    greeting = (
-        "*beta!* Finally you remembered your Dadi exists, haan?\n\n"
-        "Dadi is here. *Chalo, bol.*"
-    )
+    greeting = "*beta!* Finally you remembered your Dadi exists, haan?\n\nDadi is here. *Chalo, bol.*"
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
     cl.user_session.set("messages", [{"role": "assistant", "content": greeting}])
 
@@ -344,27 +288,19 @@ async def on_message(message: cl.Message):
             cl.user_session.set("auth_state", None)
             await cl.Message(content="Kuch gadbad ho gayi beta, thodi der mein try karo.", author="Dadi 👵🏾").send()
             return
-        sent = await _send_otp_email(email, code)
-        if not sent:
+        if not await _send_otp_email(email, code):
             cl.user_session.set("auth_state", None)
             await cl.Message(content="Email nahi gayi beta. Sahi email hai? Ek baar check karo.", author="Dadi 👵🏾").send()
             return
         cl.user_session.set("pending_email", email)
         cl.user_session.set("auth_state", "awaiting_otp")
-        await cl.Message(
-            content=f"Dadi ne `{email}` pe code bheja! Woh 6-digit code yahan type karo.",
-            author="Dadi 👵🏾",
-        ).send()
+        await cl.Message(content=f"Dadi ne `{email}` pe code bheja! Woh 6-digit code yahan type karo.", author="Dadi 👵🏾").send()
         return
 
     if auth_state == "awaiting_otp":
-        entered = message.content.strip()
         email = cl.user_session.get("pending_email")
-        if not _verify_otp(email, entered):
-            await cl.Message(
-                content="Galat code beta! Dobara try karo, ya 'Sign Up' phir se click karo.",
-                author="Dadi 👵🏾",
-            ).send()
+        if not _verify_otp(email, message.content.strip()):
+            await cl.Message(content="Galat code beta! Dobara try karo, ya 'Sign Up' phir se click karo.", author="Dadi 👵🏾").send()
             return
         cl.user_session.set("auth_state", None)
         cl.user_session.set("pending_email", None)
@@ -383,46 +319,35 @@ async def on_message(message: cl.Message):
     # ── End auth state machine ──────────────────
 
     user_text = message.content
-    messages  = cl.user_session.get("messages", [])
+    messages = cl.user_session.get("messages", [])
     messages.append({"role": "user", "content": user_text})
 
     msg = cl.Message(content="", author="Dadi 👵🏾")
     await msg.send()
-
     full_reply = ""
 
     try:
-        history_msgs = []
-        for m in messages[:-1]:
-            if m["role"] == "user":
-                history_msgs.append(HumanMessage(content=m["content"]))
-            else:
-                history_msgs.append(AIMessage(content=m["content"]))
+        history_msgs = [
+            HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
+            for m in messages[:-1]
+        ]
 
-        # Build dynamic system prompt with memories + RAG
         memories = cl.user_session.get("memories", [])
-        memory_section = ""
-        if memories:
-            memory_section = (
-                "\n\n---\nWhat Dadi remembers about this person "
-                "(weave naturally into conversation, don't recite all at once):\n"
-                + "\n".join(f"- {m}" for m in memories)
-            )
+        memory_section = (
+            "\n\n---\nWhat Dadi remembers about this person "
+            "(weave naturally into conversation, don't recite all at once):\n"
+            + "\n".join(f"- {m}" for m in memories)
+        ) if memories else ""
 
         rag_context = ""
         try:
             docs = _retrieve(user_text)
             if docs:
-                rag_context = (
-                    "\n\n---\nDadi's ancient knowledge (use only if relevant):\n"
-                    + "\n\n".join(d.page_content for d in docs)
-                )
+                rag_context = "\n\n---\nDadi's ancient knowledge (use only if relevant):\n" + "\n\n".join(d.page_content for d in docs)
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
 
-        full_system = DADI_SYSTEM_PROMPT + memory_section + rag_context
-        llm_msgs = [SystemMessage(content=full_system)] + history_msgs + [HumanMessage(content=user_text)]
-
+        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context)] + history_msgs + [HumanMessage(content=user_text)]
         async for chunk in LLM.astream(llm_msgs):
             full_reply += chunk.content
             await msg.stream_token(chunk.content)
@@ -432,7 +357,6 @@ async def on_message(message: cl.Message):
         await msg.stream_token(full_reply)
 
     await msg.update()
-
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
 
@@ -440,25 +364,18 @@ async def on_message(message: cl.Message):
     response_count = cl.user_session.get("response_count", 0) + 1
     cl.user_session.set("response_count", response_count)
 
-    # Periodically extract memories for logged-in users (every 6 responses)
     if registered_email and response_count % 6 == 0:
         await _extract_and_save_memories(registered_email, messages)
-        # Refresh memories in session
         cl.user_session.set("memories", _get_memories(registered_email))
 
-    # Detect signup intent in user message
-    signup_keywords = {"sign up", "signup", "register", "save my chat", "remember me",
-                       "create account", "log in", "login", "save conversations"}
-    user_wants_signup = any(kw in user_text.lower() for kw in signup_keywords)
-
-    # Show signup nudge: after 2nd response, or any time user asks about it
-    popup_shown = cl.user_session.get("popup_shown", False)
-    if not registered_email and (
-        (response_count == 2 and not popup_shown) or
-        (user_wants_signup and popup_shown)
-    ):
-        cl.user_session.set("popup_shown", True)
-        try:
+    # Signup nudge: after 2nd response, or when user explicitly asks
+    if not registered_email:
+        popup_shown = cl.user_session.get("popup_shown", False)
+        signup_keywords = {"sign up", "signup", "register", "save my chat", "remember me",
+                           "create account", "log in", "login", "save conversations"}
+        user_wants_signup = any(kw in user_text.lower() for kw in signup_keywords)
+        if (response_count == 2 and not popup_shown) or user_wants_signup:
+            cl.user_session.set("popup_shown", True)
             await cl.Message(
                 content=(
                     "Dadi won't remember you next time.\n\n"
@@ -471,13 +388,10 @@ async def on_message(message: cl.Message):
                     cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest",        payload={"value": "continue_guest"}),
                 ],
             ).send()
-        except Exception as e:
-            print(f"[Nudge] Failed: {e}")
 
 
 @cl.on_chat_end
 async def on_end():
-    """Save memories when session ends (best-effort)."""
     registered_email = cl.user_session.get("registered_email")
     if not registered_email:
         return
