@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from chainlit.server import app as fastapi_app
+
 import httpx
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -145,6 +149,33 @@ async def _send_otp_email(email: str, code: str) -> bool:
     return True
 
 # ─────────────────────────────────────────────
+# 5b. REST AUTH ENDPOINTS
+# ─────────────────────────────────────────────
+@fastapi_app.post("/auth/request-otp")
+async def rest_request_otp(request: Request):
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        return JSONResponse({"ok": False, "error": "Invalid email"}, status_code=400)
+    code = _generate_otp()
+    if not _save_otp(email, code):
+        return JSONResponse({"ok": False, "error": "Could not save OTP"}, status_code=500)
+    if not await _send_otp_email(email, code):
+        return JSONResponse({"ok": False, "error": "Could not send email"}, status_code=500)
+    return JSONResponse({"ok": True})
+
+@fastapi_app.post("/auth/verify-otp")
+async def rest_verify_otp(request: Request):
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    code  = (body.get("code")  or "").strip()
+    if not email or not code:
+        return JSONResponse({"ok": False, "error": "Missing fields"}, status_code=400)
+    if _verify_otp(email, code):
+        return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False, "error": "Invalid or expired code"})
+
+# ─────────────────────────────────────────────
 # 6. MEMORY HELPERS
 # ─────────────────────────────────────────────
 def _get_memories(email: str) -> list[str]:
@@ -236,27 +267,12 @@ def header_auth_callback(headers: dict):
     return cl.User(identifier=guest_id, metadata={"role": "guest"})
 
 # ─────────────────────────────────────────────
-# 9. ACTION CALLBACKS
-# ─────────────────────────────────────────────
-@cl.action_callback("signup")
-async def on_signup(action: cl.Action):
-    await action.remove()
-    cl.user_session.set("auth_state", "awaiting_email")
-    await cl.Message(content="Beta, apna email bata — Dadi wahan ek code bhejegi! (Type your email address)", author="Dadi 👵🏾").send()
-
-@cl.action_callback("continue_guest")
-async def on_continue_guest(action: cl.Action):
-    await action.remove()
-
-# ─────────────────────────────────────────────
-# 10. CHAINLIT HANDLERS
+# 9. CHAINLIT HANDLERS
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
-    cl.user_session.set("auth_state", None)
-    cl.user_session.set("pending_email", None)
 
     user = cl.context.session.user
     if user and user.metadata.get("role") == "registered":
@@ -275,49 +291,6 @@ async def on_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    auth_state = cl.user_session.get("auth_state")
-
-    # ── Auth state machine ──────────────────────
-    if auth_state == "awaiting_email":
-        email = message.content.strip().lower()
-        if "@" not in email or "." not in email.split("@")[-1]:
-            await cl.Message(content="Arre beta, ye sahi email nahi lagti! Dobara daalo.", author="Dadi 👵🏾").send()
-            return
-        code = _generate_otp()
-        if not _save_otp(email, code):
-            cl.user_session.set("auth_state", None)
-            await cl.Message(content="Kuch gadbad ho gayi beta, thodi der mein try karo.", author="Dadi 👵🏾").send()
-            return
-        if not await _send_otp_email(email, code):
-            cl.user_session.set("auth_state", None)
-            await cl.Message(content="Email nahi gayi beta. Sahi email hai? Ek baar check karo.", author="Dadi 👵🏾").send()
-            return
-        cl.user_session.set("pending_email", email)
-        cl.user_session.set("auth_state", "awaiting_otp")
-        await cl.Message(content=f"Dadi ne `{email}` pe code bheja! Woh 6-digit code yahan type karo.", author="Dadi 👵🏾").send()
-        return
-
-    if auth_state == "awaiting_otp":
-        email = cl.user_session.get("pending_email")
-        if not _verify_otp(email, message.content.strip()):
-            await cl.Message(content="Galat code beta! Dobara try karo, ya 'Sign Up' phir se click karo.", author="Dadi 👵🏾").send()
-            return
-        cl.user_session.set("auth_state", None)
-        cl.user_session.set("pending_email", None)
-        cl.user_session.set("registered_email", email)
-        cl.user_session.set("memories", _get_memories(email))
-        cl.user_session.set("popup_shown", True)
-        await cl.Message(
-            content=(
-                "Aa gaye beta! Dadi ne pehchaan liya. Ab sab yaad rahega — "
-                "tera naam, teri baatein, sab kuch. "
-                f"[Ek second, loading your history...](/activate-session?email={email})"
-            ),
-            author="Dadi 👵🏾",
-        ).send()
-        return
-    # ── End auth state machine ──────────────────
-
     user_text = message.content
     messages = cl.user_session.get("messages", [])
     messages.append({"role": "user", "content": user_text})
@@ -368,7 +341,7 @@ async def on_message(message: cl.Message):
         await _extract_and_save_memories(registered_email, messages)
         cl.user_session.set("memories", _get_memories(registered_email))
 
-    # Signup nudge: after 2nd response, or when user explicitly asks
+    # Popup nudge: after 2nd response (or on explicit signup keywords), trigger popup via hidden link
     if not registered_email:
         popup_shown = cl.user_session.get("popup_shown", False)
         signup_keywords = {"sign up", "signup", "register", "save my chat", "remember me",
@@ -376,18 +349,7 @@ async def on_message(message: cl.Message):
         user_wants_signup = any(kw in user_text.lower() for kw in signup_keywords)
         if (response_count == 2 and not popup_shown) or user_wants_signup:
             cl.user_session.set("popup_shown", True)
-            await cl.Message(
-                content=(
-                    "Dadi won't remember you next time.\n\n"
-                    "Right now you're chatting as a guest — your conversations vanish when you leave. "
-                    "Sign up (just your email, no password!) so Dadi can remember your name, "
-                    "your stories, and pick up right where you left off."
-                ),
-                actions=[
-                    cl.Action(name="signup",         value="signup",         label="Sign Up — Save My Chats", payload={"value": "signup"}),
-                    cl.Action(name="continue_guest", value="continue_guest", label="Continue as Guest",        payload={"value": "continue_guest"}),
-                ],
-            ).send()
+            await cl.Message(content="[](/show-login-popup)", author="Dadi 👵🏾").send()
 
 
 @cl.on_chat_end

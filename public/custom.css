@@ -31,3 +31,179 @@ button[aria-label="Readme"],
 button[aria-label="readme"] {
   display: none !important;
 }
+
+/* ── Hide the show-login-popup trigger link injected by backend ── */
+a[href="/show-login-popup"] {
+  display: none !important;
+}
+
+/* ══════════════════════════════════════════════
+   LOGIN POPUP
+   ══════════════════════════════════════════════ */
+
+.dadi-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Playfair Display', serif;
+}
+
+.dadi-popup-modal {
+  background: #FEF0E7;
+  border-radius: 16px;
+  padding: 2rem 2.25rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dadi-popup-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+  color: #8B1A1A;
+  font-weight: 700;
+  font-family: 'Playfair Display', serif;
+}
+
+.dadi-popup-sub {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #555;
+  font-family: sans-serif;
+}
+
+.dadi-popup-input {
+  padding: 0.65rem 0.9rem;
+  border: 1.5px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  font-family: sans-serif;
+  transition: border-color 0.2s;
+  background: #fff;
+}
+
+.dadi-popup-input:focus {
+  border-color: #8B1A1A;
+}
+
+.dadi-popup-otp-input {
+  letter-spacing: 0.35em;
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.dadi-popup-error {
+  margin: 0;
+  min-height: 1.2em;
+  color: #c0392b;
+  font-size: 0.875rem;
+  font-family: sans-serif;
+}
+
+.dadi-popup-btn-primary {
+  padding: 0.7rem 1rem;
+  background: #8B1A1A;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: 'Playfair Display', serif;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dadi-popup-btn-primary:hover:not(:disabled) {
+  background: #6e1414;
+}
+
+.dadi-popup-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dadi-popup-btn-ghost {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: #8B1A1A;
+  border: 1.5px solid #8B1A1A;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: 'Playfair Display', serif;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.dadi-popup-btn-ghost:hover {
+  background: #8B1A1A;
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .dadi-popup-modal {
+    margin: 1rem;
+    padding: 1.5rem 1.25rem;
+    max-width: 100%;
+  }
+}
+
+/* ══════════════════════════════════════════════
+   USER EMAIL BADGE
+   ══════════════════════════════════════════════ */
+
+.dadi-user-badge {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 99999;
+  background: #8B1A1A;
+  color: #fff;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-family: sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.dadi-user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #FEF0E7;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 120px;
+  overflow: hidden;
+  z-index: 100001;
+}
+
+.dadi-user-signout {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: sans-serif;
+  font-size: 0.875rem;
+  color: #8B1A1A;
+  cursor: pointer;
+}
+
+.dadi-user-signout:hover {
+  background: #f5e6dc;
+}
