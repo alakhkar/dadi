@@ -11,10 +11,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from chainlit.server import app as fastapi_app
-
 import httpx
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -147,33 +143,6 @@ async def _send_otp_email(email: str, code: str) -> bool:
         print(f"[OTP] Resend error: {r.text}")
         return False
     return True
-
-# ─────────────────────────────────────────────
-# 5b. REST AUTH ENDPOINTS
-# ─────────────────────────────────────────────
-@fastapi_app.post("/auth/request-otp")
-async def rest_request_otp(request: Request):
-    body = await request.json()
-    email = (body.get("email") or "").strip().lower()
-    if not email or "@" not in email or "." not in email.split("@")[-1]:
-        return JSONResponse({"ok": False, "error": "Invalid email"}, status_code=400)
-    code = _generate_otp()
-    if not _save_otp(email, code):
-        return JSONResponse({"ok": False, "error": "Could not save OTP"}, status_code=500)
-    if not await _send_otp_email(email, code):
-        return JSONResponse({"ok": False, "error": "Could not send email"}, status_code=500)
-    return JSONResponse({"ok": True})
-
-@fastapi_app.post("/auth/verify-otp")
-async def rest_verify_otp(request: Request):
-    body = await request.json()
-    email = (body.get("email") or "").strip().lower()
-    code  = (body.get("code")  or "").strip()
-    if not email or not code:
-        return JSONResponse({"ok": False, "error": "Missing fields"}, status_code=400)
-    if _verify_otp(email, code):
-        return JSONResponse({"ok": True})
-    return JSONResponse({"ok": False, "error": "Invalid or expired code"})
 
 # ─────────────────────────────────────────────
 # 6. MEMORY HELPERS
@@ -360,3 +329,44 @@ async def on_end():
     messages = cl.user_session.get("messages", [])
     print(f"[Memory] Session ended — extracting for {registered_email}")
     await _extract_and_save_memories(registered_email, messages)
+
+
+# ─────────────────────────────────────────────
+# 10. REST AUTH ENDPOINTS
+# Registered after all Chainlit decorators so chainlit.server.app is ready.
+# ─────────────────────────────────────────────
+def _register_auth_routes():
+    try:
+        from fastapi import Request
+        from fastapi.responses import JSONResponse
+        from chainlit.server import app as _app
+
+        @_app.post("/auth/request-otp")
+        async def _rest_request_otp(request: Request):
+            body = await request.json()
+            email = (body.get("email") or "").strip().lower()
+            if not email or "@" not in email or "." not in email.split("@")[-1]:
+                return JSONResponse({"ok": False, "error": "Invalid email"}, status_code=400)
+            code = _generate_otp()
+            if not _save_otp(email, code):
+                return JSONResponse({"ok": False, "error": "Could not save OTP"}, status_code=500)
+            if not await _send_otp_email(email, code):
+                return JSONResponse({"ok": False, "error": "Could not send email"}, status_code=500)
+            return JSONResponse({"ok": True})
+
+        @_app.post("/auth/verify-otp")
+        async def _rest_verify_otp(request: Request):
+            body = await request.json()
+            email = (body.get("email") or "").strip().lower()
+            code  = (body.get("code")  or "").strip()
+            if not email or not code:
+                return JSONResponse({"ok": False, "error": "Missing fields"}, status_code=400)
+            if _verify_otp(email, code):
+                return JSONResponse({"ok": True})
+            return JSONResponse({"ok": False, "error": "Invalid or expired code"})
+
+        print("[Auth] REST endpoints registered: /auth/request-otp, /auth/verify-otp")
+    except Exception as e:
+        print(f"[Auth] WARNING: Could not register REST endpoints: {e}")
+
+_register_auth_routes()
