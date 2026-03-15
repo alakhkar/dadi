@@ -18,7 +18,7 @@ description = "She will roast you. She will fix you. 👵🏾"
 # Default to dark theme
 default_theme = "light"
 # Collapse the sidebar by default
-default_collapse_content = false
+default_collapse_content = true
 # Logo shown in the header
 logo = "dadi.png"
 custom_css = "/public/custom.css"
