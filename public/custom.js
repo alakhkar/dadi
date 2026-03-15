@@ -74,58 +74,71 @@
   new MutationObserver(hideReadmeButton).observe(document.body, { childList: true, subtree: true });
 
   /* ══════════════════════════════════════════════
-     LOGIN POPUP
+     LOGIN POPUP — all styles inline (no CSS class dependency)
      ══════════════════════════════════════════════ */
+
+  var S = {
+    backdrop: 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100000;display:flex;align-items:center;justify-content:center;font-family:sans-serif;',
+    modal:    'background:#FEF0E7;border-radius:16px;padding:2rem 2.25rem;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.25);display:flex;flex-direction:column;gap:0.75rem;box-sizing:border-box;',
+    title:    'margin:0 0 0.25rem;font-size:1.4rem;color:#8B1A1A;font-weight:700;font-family:"Playfair Display",serif;',
+    sub:      'margin:0 0 0.5rem;font-size:0.95rem;color:#555;',
+    input:    'padding:0.65rem 0.9rem;border:1.5px solid #ccc;border-radius:8px;font-size:1rem;outline:none;font-family:sans-serif;background:#fff;box-sizing:border-box;width:100%;',
+    otpInput: 'padding:0.65rem 0.9rem;border:1.5px solid #ccc;border-radius:8px;font-size:1.4rem;outline:none;font-family:sans-serif;background:#fff;box-sizing:border-box;width:100%;letter-spacing:0.35em;text-align:center;',
+    err:      'margin:0;min-height:1.2em;color:#c0392b;font-size:0.875rem;',
+    btnPri:   'padding:0.7rem 1rem;background:#8B1A1A;color:#fff;border:none;border-radius:8px;font-size:1rem;font-family:"Playfair Display",serif;cursor:pointer;width:100%;',
+    btnGhost: 'padding:0.5rem 1rem;background:transparent;color:#8B1A1A;border:1.5px solid #8B1A1A;border-radius:8px;font-size:0.9rem;font-family:"Playfair Display",serif;cursor:pointer;width:100%;',
+  };
 
   function showLoginPopup() {
     if (document.getElementById('dadi-login-popup')) return;
 
     const backdrop = document.createElement('div');
     backdrop.id = 'dadi-login-popup';
-    backdrop.className = 'dadi-popup-backdrop';
+    backdrop.style.cssText = S.backdrop;
 
     const modal = document.createElement('div');
-    modal.className = 'dadi-popup-modal';
+    modal.style.cssText = S.modal;
 
-    function closePopup() {
-      backdrop.remove();
-    }
+    function closePopup() { backdrop.remove(); }
 
     /* ── Panel 1: Email input ── */
     function showEmailPanel() {
       modal.innerHTML = '';
 
       const title = document.createElement('h2');
-      title.className = 'dadi-popup-title';
+      title.style.cssText = S.title;
       title.textContent = 'Save your chats with Dadi';
 
       const sub = document.createElement('p');
-      sub.className = 'dadi-popup-sub';
+      sub.style.cssText = S.sub;
       sub.textContent = 'Sign up with just your email — no password. Dadi will remember you.';
 
       const input = document.createElement('input');
       input.type = 'email';
       input.placeholder = 'your@email.com';
-      input.className = 'dadi-popup-input';
+      input.style.cssText = S.input;
+      input.addEventListener('focus', () => { input.style.borderColor = '#8B1A1A'; });
+      input.addEventListener('blur',  () => { input.style.borderColor = '#ccc'; });
 
       const err = document.createElement('p');
-      err.className = 'dadi-popup-error';
+      err.style.cssText = S.err;
 
       const btnSend = document.createElement('button');
       btnSend.textContent = 'Send Code';
-      btnSend.className = 'dadi-popup-btn-primary';
+      btnSend.style.cssText = S.btnPri;
 
       const btnGuest = document.createElement('button');
       btnGuest.textContent = 'Continue as Guest';
-      btnGuest.className = 'dadi-popup-btn-ghost';
+      btnGuest.style.cssText = S.btnGhost;
 
       btnSend.addEventListener('click', async () => {
         const email = input.value.trim().toLowerCase();
-        if (!email || !email.includes('@') || !email.includes('.')) {
+        if (!email || !email.includes('@') || !email.split('@')[1]?.includes('.')) {
           err.textContent = 'Please enter a valid email address.';
           return;
         }
         btnSend.disabled = true;
+        btnSend.style.opacity = '0.6';
         btnSend.textContent = 'Sending…';
         err.textContent = '';
         try {
@@ -140,11 +153,13 @@
           } else {
             err.textContent = data.error || 'Something went wrong. Try again.';
             btnSend.disabled = false;
+            btnSend.style.opacity = '1';
             btnSend.textContent = 'Send Code';
           }
         } catch (_) {
           err.textContent = 'Network error. Please try again.';
           btnSend.disabled = false;
+          btnSend.style.opacity = '1';
           btnSend.textContent = 'Send Code';
         }
       });
@@ -161,30 +176,32 @@
       modal.innerHTML = '';
 
       const title = document.createElement('h2');
-      title.className = 'dadi-popup-title';
+      title.style.cssText = S.title;
       title.textContent = 'Enter your code';
 
       const sub = document.createElement('p');
-      sub.className = 'dadi-popup-sub';
-      sub.textContent = `Dadi sent a 6-digit code to ${email}`;
+      sub.style.cssText = S.sub;
+      sub.textContent = 'Dadi sent a 6-digit code to ' + email;
 
       const input = document.createElement('input');
       input.type = 'text';
       input.inputMode = 'numeric';
       input.maxLength = 6;
       input.placeholder = '123456';
-      input.className = 'dadi-popup-input dadi-popup-otp-input';
+      input.style.cssText = S.otpInput;
+      input.addEventListener('focus', () => { input.style.borderColor = '#8B1A1A'; });
+      input.addEventListener('blur',  () => { input.style.borderColor = '#ccc'; });
 
       const err = document.createElement('p');
-      err.className = 'dadi-popup-error';
+      err.style.cssText = S.err;
 
       const btnVerify = document.createElement('button');
       btnVerify.textContent = 'Verify';
-      btnVerify.className = 'dadi-popup-btn-primary';
+      btnVerify.style.cssText = S.btnPri;
 
       const btnBack = document.createElement('button');
       btnBack.textContent = 'Change Email';
-      btnBack.className = 'dadi-popup-btn-ghost';
+      btnBack.style.cssText = S.btnGhost;
 
       btnVerify.addEventListener('click', async () => {
         const code = input.value.trim();
@@ -193,6 +210,7 @@
           return;
         }
         btnVerify.disabled = true;
+        btnVerify.style.opacity = '0.6';
         btnVerify.textContent = 'Verifying…';
         err.textContent = '';
         try {
@@ -210,11 +228,13 @@
           } else {
             err.textContent = data.error || 'Wrong code. Try again.';
             btnVerify.disabled = false;
+            btnVerify.style.opacity = '1';
             btnVerify.textContent = 'Verify';
           }
         } catch (_) {
           err.textContent = 'Network error. Please try again.';
           btnVerify.disabled = false;
+          btnVerify.style.opacity = '1';
           btnVerify.textContent = 'Verify';
         }
       });
@@ -232,39 +252,40 @@
   }
 
   /* ── Popup trigger — detects [](/show-login-popup) sent by backend ── */
-  let popupTriggered = false;
+  var popupTriggered = false;
   new MutationObserver(() => {
     if (popupTriggered) return;
-    if (getCookie('dadi_user')) return; // don't show to already-logged-in users on thread replay
-    const link = document.querySelector('a[href="/show-login-popup"]');
+    if (getCookie('dadi_user')) return; // don't show to logged-in users on thread replay
+    var link = document.querySelector('a[href="/show-login-popup"]');
     if (!link) return;
     popupTriggered = true;
     showLoginPopup();
   }).observe(document.body, { childList: true, subtree: true });
 
   /* ══════════════════════════════════════════════
-     USER EMAIL BADGE (top-right, shown when logged in)
+     USER EMAIL BADGE — top-right, all styles inline
      ══════════════════════════════════════════════ */
 
   function injectUserBadge() {
     if (document.getElementById('dadi-user-badge')) return;
-    const email = getCookie('dadi_user');
+    var email = getCookie('dadi_user');
     if (!email) return;
 
-    const decoded = decodeURIComponent(email);
+    var decoded = decodeURIComponent(email);
 
-    const badge = document.createElement('div');
+    var badge = document.createElement('div');
     badge.id = 'dadi-user-badge';
-    badge.className = 'dadi-user-badge';
+    badge.style.cssText = 'position:fixed;top:14px;right:16px;z-index:99999;background:#8B1A1A;color:#fff;padding:0.3rem 0.75rem;border-radius:20px;font-size:0.8rem;font-family:sans-serif;cursor:pointer;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;user-select:none;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
     badge.textContent = decoded;
 
-    const menu = document.createElement('div');
-    menu.className = 'dadi-user-menu';
-    menu.style.display = 'none';
+    var menu = document.createElement('div');
+    menu.style.cssText = 'position:absolute;top:calc(100% + 6px);right:0;background:#FEF0E7;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:120px;overflow:hidden;z-index:100001;display:none;';
 
-    const signOut = document.createElement('button');
+    var signOut = document.createElement('button');
     signOut.textContent = 'Sign Out';
-    signOut.className = 'dadi-user-signout';
+    signOut.style.cssText = 'display:block;width:100%;padding:0.6rem 1rem;background:none;border:none;text-align:left;font-family:sans-serif;font-size:0.875rem;color:#8B1A1A;cursor:pointer;';
+    signOut.addEventListener('mouseover', () => { signOut.style.background = '#f5e6dc'; });
+    signOut.addEventListener('mouseout',  () => { signOut.style.background = 'none'; });
     signOut.addEventListener('click', (e) => {
       e.stopPropagation();
       clearCookie('dadi_user');
@@ -279,10 +300,7 @@
       e.stopPropagation();
       menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
     });
-
-    document.addEventListener('click', () => {
-      menu.style.display = 'none';
-    });
+    document.addEventListener('click', () => { menu.style.display = 'none'; });
 
     document.documentElement.appendChild(badge);
   }
