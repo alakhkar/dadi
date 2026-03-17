@@ -234,10 +234,11 @@
   let popupTriggered = false;
   new MutationObserver(() => {
     if (popupTriggered || getLoggedInEmail()) return;
-    const link = document.querySelector('a[href="dadi://auth-popup"]');
+    const link = document.querySelector('a[href="/dadi-auth-popup"]');
     if (!link) return;
     popupTriggered = true;
     link.style.display = 'none';
+    link.addEventListener('click', e => e.preventDefault());
     setTimeout(showPopup, 400);
   }).observe(document.body, { childList: true, subtree: true });
 

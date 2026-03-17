@@ -33,7 +33,7 @@ button[aria-label="readme"] {
 }
 
 /* Hide the invisible popup trigger link embedded in Dadi's message */
-a[href="dadi://auth-popup"] {
+a[href="/dadi-auth-popup"] {
   display: none !important;
 }
 

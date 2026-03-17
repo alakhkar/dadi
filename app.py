@@ -361,7 +361,7 @@ async def on_message(message: cl.Message):
         if (response_count == 2 and not popup_shown) or (user_wants_signup and not popup_shown):
             cl.user_session.set("popup_shown", True)
             # Append invisible trigger link — custom.js detects it and shows the popup
-            msg.content += "\u200b[\u200b](dadi://auth-popup)"
+            msg.content += "\u200b[\u200b](/dadi-auth-popup)"
             await msg.update()
 
 
