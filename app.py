@@ -83,14 +83,19 @@ def _upload_chunks(chunks: list) -> bool:
             print(f"[RAG] Uploaded {i+1}/{len(chunks)} chunks...")
     return True
 
-def _retrieve(query: str, k: int = 3) -> list[Document]:
+async def _retrieve(query: str, k: int = 3) -> list[Document]:
     try:
-        embedding = EMBEDDINGS.embed_query(query)
+        embedding = await EMBEDDINGS.aembed_query(query)
     except Exception as e:
         print(f"[RAG] Embedding failed: {e}")
         return []
-    r = httpx.post(f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge", headers=SUPA_HEADERS,
-                   json={"query_embedding": embedding, "match_count": k, "filter": {}}, timeout=15)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/match_dadi_knowledge",
+            headers=SUPA_HEADERS,
+            json={"query_embedding": embedding, "match_count": k, "filter": {}},
+            timeout=15,
+        )
     if r.status_code != 200:
         print(f"[RAG] Retrieval failed: {r.text}")
         return []
@@ -102,25 +107,35 @@ def _retrieve(query: str, k: int = 3) -> list[Document]:
 def _generate_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
-def _save_otp(email: str, code: str) -> bool:
+async def _save_otp(email: str, code: str) -> bool:
     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    r = httpx.post(f"{SUPABASE_URL}/rest/v1/otp_codes",
-                   headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-                   json={"email": email, "code": code, "expires_at": expires_at}, timeout=10)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/rest/v1/otp_codes",
+            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+            json={"email": email, "code": code, "expires_at": expires_at},
+            timeout=10,
+        )
     return r.status_code in (200, 201)
 
-def _verify_otp(email: str, code: str) -> bool:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
-    r = httpx.get(
-        f"{SUPABASE_URL}/rest/v1/otp_codes"
-        f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
-        headers=SUPA_HEADERS, timeout=10)
-    rows = r.json() if r.status_code == 200 else []
-    if not rows:
-        return False
-    httpx.patch(f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{rows[0]['id']}",
-                headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-                json={"used": True}, timeout=10)
+async def _verify_otp(email: str, code: str) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{SUPABASE_URL}/rest/v1/otp_codes"
+            f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
+            headers=SUPA_HEADERS,
+            timeout=10,
+        )
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            return False
+        await client.patch(
+            f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{rows[0]['id']}",
+            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+            json={"used": True},
+            timeout=10,
+        )
     return True
 
 async def _send_otp_email(email: str, code: str) -> bool:
@@ -147,22 +162,29 @@ async def _send_otp_email(email: str, code: str) -> bool:
 # ─────────────────────────────────────────────
 # 6. MEMORY HELPERS
 # ─────────────────────────────────────────────
-def _get_memories(email: str) -> list[str]:
+async def _get_memories(email: str) -> list[str]:
     try:
-        r = httpx.get(
-            f"{SUPABASE_URL}/rest/v1/user_memories?user_email=eq.{email}&select=memory&order=created_at.desc&limit=20",
-            headers=SUPA_HEADERS, timeout=10)
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/user_memories?user_email=eq.{email}&select=memory&order=created_at.desc&limit=20",
+                headers=SUPA_HEADERS,
+                timeout=10,
+            )
         if r.status_code == 200:
             return [row["memory"] for row in r.json()]
     except Exception as e:
         print(f"[Memory] Load failed: {e}")
     return []
 
-def _save_memory(email: str, memory: str):
+async def _save_memory(email: str, memory: str):
     try:
-        httpx.post(f"{SUPABASE_URL}/rest/v1/user_memories",
-                   headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-                   json={"user_email": email, "memory": memory}, timeout=10)
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/user_memories",
+                headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+                json={"user_email": email, "memory": memory},
+                timeout=10,
+            )
     except Exception as e:
         print(f"[Memory] Save error: {e}")
 
@@ -189,7 +211,7 @@ async def _extract_and_save_memories(email: str, messages: list):
         facts = json.loads(text)
         for fact in facts[:3]:
             if isinstance(fact, str) and len(fact) > 5:
-                _save_memory(email, fact)
+                await _save_memory(email, fact)
                 print(f"[Memory] Saved for {email}: {fact}")
     except Exception as e:
         print(f"[Memory] Extraction failed: {e}")
@@ -235,7 +257,7 @@ try:
         if not email or "@" not in email or "." not in email.split("@")[-1]:
             return JSONResponse({"error": "Invalid email address"}, status_code=400)
         code = _generate_otp()
-        if not _save_otp(email, code):
+        if not await _save_otp(email, code):
             return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
         if not await _send_otp_email(email, code):
             return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
@@ -251,7 +273,7 @@ try:
         code = data.get("code", "").strip()
         if not email or not code:
             return JSONResponse({"error": "Email and code are required"}, status_code=400)
-        if not _verify_otp(email, code):
+        if not await _verify_otp(email, code):
             return JSONResponse({"error": "Wrong or expired code — please try again"}, status_code=400)
         return JSONResponse({"ok": True, "email": email})
 
@@ -260,7 +282,7 @@ except Exception as e:
     print(f"[Auth] REST endpoints not available: {e}")
 
 # ─────────────────────────────────────────────
-# 9. HEADER AUTH (single auth mechanism)
+# 9. HEADER AUTH
 # ─────────────────────────────────────────────
 @cl.header_auth_callback
 def header_auth_callback(headers: dict):
@@ -284,13 +306,11 @@ def header_auth_callback(headers: dict):
 async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
-    cl.user_session.set("popup_shown", False)
 
     user = cl.context.session.user
     if user and user.metadata.get("role") == "registered":
         cl.user_session.set("registered_email", user.identifier)
-        cl.user_session.set("popup_shown", True)
-        cl.user_session.set("memories", _get_memories(user.identifier))
+        cl.user_session.set("memories", await _get_memories(user.identifier))
     else:
         cl.user_session.set("registered_email", None)
         cl.user_session.set("memories", [])
@@ -325,7 +345,7 @@ async def on_message(message: cl.Message):
 
         rag_context = ""
         try:
-            docs = _retrieve(user_text)
+            docs = await _retrieve(user_text)
             if docs:
                 rag_context = "\n\n---\nDadi's ancient knowledge (use only if relevant):\n" + "\n\n".join(d.page_content for d in docs)
         except Exception as e:
@@ -350,19 +370,7 @@ async def on_message(message: cl.Message):
 
     if registered_email and response_count % 6 == 0:
         await _extract_and_save_memories(registered_email, messages)
-        cl.user_session.set("memories", _get_memories(registered_email))
-
-    # Popup trigger: after 2nd response, or when user explicitly asks to login/signup
-    if not registered_email:
-        popup_shown = cl.user_session.get("popup_shown", False)
-        signup_keywords = {"sign up", "signup", "register", "save my chat", "remember me",
-                           "create account", "log in", "login", "save conversations"}
-        user_wants_signup = any(kw in user_text.lower() for kw in signup_keywords)
-        if (response_count == 2 and not popup_shown) or (user_wants_signup and not popup_shown):
-            cl.user_session.set("popup_shown", True)
-            # Append invisible trigger link — custom.js detects it and shows the popup
-            msg.content += "\u200b[\u200b](/dadi-auth-popup)"
-            await msg.update()
+        cl.user_session.set("memories", await _get_memories(registered_email))
 
 
 @cl.on_chat_end

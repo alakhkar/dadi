@@ -53,10 +53,10 @@
   ══════════════════════════════════════════ */
 
   let popupOpen = false;
+  let popupDismissed = false;
 
   function showPopup() {
-    if (popupOpen || getLoggedInEmail()) return;
-    if (sessionStorage.getItem('dadi_popup_dismissed') === '1') return;
+    if (popupOpen || popupDismissed || getLoggedInEmail()) return;
     popupOpen = true;
     buildPopup();
   }
@@ -69,7 +69,7 @@
       setTimeout(() => backdrop.remove(), 250);
     }
     popupOpen = false;
-    sessionStorage.setItem('dadi_popup_dismissed', '1');
+    popupDismissed = true;
   }
 
   function buildPopup() {
@@ -118,18 +118,15 @@
 
     let pendingEmail = '';
 
-    // Focus email input
     setTimeout(() => {
       const inp = document.getElementById('dadi-email-inp');
       if (inp) inp.focus();
     }, 80);
 
-    // OTP: digits only
     document.getElementById('dadi-otp-inp').addEventListener('input', function () {
       this.value = this.value.replace(/\D/g, '');
     });
 
-    // Enter key shortcuts
     document.getElementById('dadi-email-inp').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
     document.getElementById('dadi-otp-inp').addEventListener('keydown', e => { if (e.key === 'Enter') verifyCode(); });
 
@@ -144,7 +141,6 @@
       setTimeout(() => document.getElementById('dadi-email-inp').focus(), 50);
     });
 
-    // Close on backdrop click
     backdrop.addEventListener('click', e => { if (e.target === backdrop) dismissPopup(); });
 
     function setBtn(id, loading, label) {
@@ -216,7 +212,6 @@
           errEl.style.display = 'block';
           return;
         }
-        // Success — set cookie, clear guest cookie, reload
         setCookie('dadi_user', encodeURIComponent(data.email), 31536000);
         deleteCookie('dadi_guest');
         localStorage.removeItem('access_token');
@@ -230,16 +225,25 @@
     }
   }
 
-  /* ── Popup trigger: backend embeds invisible link → custom.js detects it ── */
-  let popupTriggered = false;
+  /* ── Popup trigger: count Dadi's messages in the DOM ──
+     Greeting = 1, first reply = 2, second reply = 3 → show popup.
+     This avoids relying on markdown link rendering (fragile). ── */
+  let dadiMsgCount = 0;
+  let popupCheckTimer = null;
+
   new MutationObserver(() => {
-    if (popupTriggered || getLoggedInEmail()) return;
-    const link = document.querySelector('a[href="/dadi-auth-popup"]');
-    if (!link) return;
-    popupTriggered = true;
-    link.style.display = 'none';
-    link.addEventListener('click', e => e.preventDefault());
-    setTimeout(showPopup, 400);
+    if (getLoggedInEmail() || popupOpen || popupDismissed) return;
+    clearTimeout(popupCheckTimer);
+    popupCheckTimer = setTimeout(() => {
+      let count = 0;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue.trim() === 'Dadi 👵🏾') count++;
+      }
+      if (count >= 3 && dadiMsgCount < 3) setTimeout(showPopup, 600);
+      dadiMsgCount = count;
+    }, 300);
   }).observe(document.body, { childList: true, subtree: true });
 
   /* ══════════════════════════════════════════
@@ -248,12 +252,10 @@
   const loggedEmail = getLoggedInEmail();
 
   if (loggedEmail) {
-    // Shorten display: keep username part + domain, truncate middle if long
     function shortEmail(e) {
       if (e.length <= 26) return e;
       const [u, d] = e.split('@');
-      const short = u.length > 10 ? u.slice(0, 8) + '…' : u;
-      return short + '@' + d;
+      return (u.length > 10 ? u.slice(0, 8) + '…' : u) + '@' + d;
     }
 
     function buildUserBadge() {
@@ -261,7 +263,6 @@
 
       const badge = document.createElement('div');
       badge.id = 'dadi-user-badge';
-
       badge.innerHTML = `
         <button id="dadi-badge-btn" title="${loggedEmail}">
           <span class="dadi-badge-icon">👤</span>
@@ -273,20 +274,14 @@
           <button id="dadi-signout-btn">Sign Out</button>
         </div>
       `;
-
       document.documentElement.appendChild(badge);
 
-      const btn = document.getElementById('dadi-badge-btn');
       const menu = document.getElementById('dadi-badge-menu');
-
-      btn.addEventListener('click', e => {
+      document.getElementById('dadi-badge-btn').addEventListener('click', e => {
         e.stopPropagation();
-        const open = menu.style.display === 'block';
-        menu.style.display = open ? 'none' : 'block';
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
       });
-
       document.addEventListener('click', () => { menu.style.display = 'none'; });
-
       document.getElementById('dadi-signout-btn').addEventListener('click', () => {
         deleteCookie('dadi_user');
         localStorage.removeItem('access_token');
@@ -295,8 +290,8 @@
     }
 
     buildUserBadge();
-    // Re-inject if React re-renders remove it
-    new MutationObserver(buildUserBadge).observe(document.documentElement, { childList: true });
+    const badgeObs = new MutationObserver(buildUserBadge);
+    badgeObs.observe(document.documentElement, { childList: true });
   }
 
   /* ── Persistent logo — re-inject into <html> if ever removed ── */
