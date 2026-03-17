@@ -31,3 +31,228 @@ button[aria-label="Readme"],
 button[aria-label="readme"] {
   display: none !important;
 }
+
+/* Hide the invisible popup trigger link embedded in Dadi's message */
+a[href="dadi://auth-popup"] {
+  display: none !important;
+}
+
+/* ══════════════════════════════════════════
+   AUTH POPUP
+══════════════════════════════════════════ */
+
+#dadi-auth-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dadi-fade-in 0.2s ease;
+}
+
+#dadi-auth-modal {
+  background: #FDF6F0;
+  border-radius: 18px;
+  padding: 36px 32px 28px;
+  max-width: 420px;
+  width: 92%;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  animation: dadi-slide-up 0.25s ease;
+  font-family: 'Playfair Display', serif;
+}
+
+.dadi-modal-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.dadi-modal-logo {
+  height: 58px;
+  width: auto;
+  display: block;
+  margin: 0 auto 14px;
+}
+
+.dadi-modal-title {
+  color: #8B1A1A;
+  font-size: 1.3rem;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.dadi-modal-subtitle {
+  color: #666;
+  font-size: 0.88rem;
+  font-family: sans-serif;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dadi-modal-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  font-family: sans-serif;
+  text-align: center;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #fdf0ee;
+  border-radius: 8px;
+}
+
+.dadi-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 2px solid #e0d5cc;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: sans-serif;
+  outline: none;
+  margin-bottom: 12px;
+  background: #fff;
+  transition: border-color 0.2s;
+  color: #333;
+}
+
+.dadi-modal-input:focus {
+  border-color: #8B1A1A;
+}
+
+.dadi-otp-input {
+  font-size: 1.5rem;
+  font-family: monospace;
+  text-align: center;
+  letter-spacing: 0.35em;
+}
+
+.dadi-modal-btn-primary {
+  width: 100%;
+  padding: 13px;
+  background: #8B1A1A;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  margin-bottom: 4px;
+}
+
+.dadi-modal-btn-primary:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.dadi-modal-btn-ghost {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  color: #999;
+  border: none;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-family: sans-serif;
+  text-decoration: underline;
+  margin-top: 4px;
+}
+
+.dadi-modal-btn-ghost:hover {
+  color: #666;
+}
+
+/* ══════════════════════════════════════════
+   USER BADGE — top-right email + sign out
+══════════════════════════════════════════ */
+
+#dadi-user-badge {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 99997;
+  font-family: sans-serif;
+}
+
+#dadi-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #8B1A1A;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 7px 14px 7px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transition: opacity 0.2s;
+  font-family: sans-serif;
+}
+
+#dadi-badge-btn:hover {
+  opacity: 0.85;
+}
+
+.dadi-badge-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.dadi-badge-caret {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+#dadi-badge-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  min-width: 200px;
+  overflow: hidden;
+  border: 1px solid #ece6e0;
+}
+
+.dadi-badge-email-full {
+  padding: 11px 16px;
+  font-size: 0.8rem;
+  color: #888;
+  border-bottom: 1px solid #f0e8e2;
+  word-break: break-all;
+}
+
+#dadi-signout-btn {
+  width: 100%;
+  padding: 11px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.92rem;
+  color: #c0392b;
+  font-family: sans-serif;
+  transition: background 0.15s;
+}
+
+#dadi-signout-btn:hover {
+  background: #fdf0ee;
+}
+
+/* ── Animations ── */
+@keyframes dadi-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes dadi-slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
