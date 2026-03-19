@@ -179,6 +179,11 @@ ensure_knowledge_uploaded()
 # ─────────────────────────────────────────────
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
+    # Guest skip: any username with password "guest"
+    if password == "guest":
+        guest_id = username if username.startswith("guest_") else f"guest_{username}"
+        return cl.User(identifier=guest_id, metadata={"role": "guest"})
+    # Registered: valid email as username, any non-empty password
     email = username.strip().lower()
     if email and "@" in email and "." in email.split("@")[-1]:
         return cl.User(identifier=email, metadata={"role": "user"})
@@ -192,9 +197,11 @@ async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
 
-    email = cl.context.session.user.identifier
+    user = cl.context.session.user
+    is_guest = user.metadata.get("role") == "guest"
+    email = None if is_guest else user.identifier
     cl.user_session.set("email", email)
-    cl.user_session.set("memories", await _get_memories(email))
+    cl.user_session.set("memories", await _get_memories(email) if email else [])
 
     greeting = "*beta!* Finally you remembered your Dadi exists, haan?\n\nDadi is here. *Chalo, bol.*"
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
