@@ -225,26 +225,10 @@
     }
   }
 
-  /* ── Popup trigger: count Dadi's messages in the DOM ──
-     Greeting = 1, first reply = 2, second reply = 3 → show popup.
-     This avoids relying on markdown link rendering (fragile). ── */
-  let dadiMsgCount = 0;
-  let popupCheckTimer = null;
-
-  new MutationObserver(() => {
-    if (getLoggedInEmail() || popupOpen || popupDismissed) return;
-    clearTimeout(popupCheckTimer);
-    popupCheckTimer = setTimeout(() => {
-      let count = 0;
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        if (node.nodeValue.trim() === 'Dadi 👵🏾') count++;
-      }
-      if (count >= 3 && dadiMsgCount < 3) setTimeout(showPopup, 600);
-      dadiMsgCount = count;
-    }, 300);
-  }).observe(document.body, { childList: true, subtree: true });
+  /* ── Popup trigger ──
+     Show the sign-in prompt after the user has had time to experience the chat.
+     Timer fires 20 seconds after page load — simple and reliable. ── */
+  setTimeout(showPopup, 20000);
 
   /* ══════════════════════════════════════════
      USER BADGE — top-right email + sign out
