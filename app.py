@@ -122,8 +122,15 @@ def _verify_otp_sync(email: str, code: str) -> bool:
     try:
         with httpx.Client() as client:
             r = client.get(
-                f"{SUPABASE_URL}/rest/v1/otp_codes"
-                f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
+                f"{SUPABASE_URL}/rest/v1/otp_codes",
+                params={
+                    "email": f"eq.{email}",
+                    "code": f"eq.{code}",
+                    "used": "eq.false",
+                    "expires_at": f"gt.{now}",
+                    "select": "id",
+                    "limit": "1",
+                },
                 headers=SUPA_HEADERS,
                 timeout=10,
             )
