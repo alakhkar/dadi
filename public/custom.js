@@ -3,6 +3,16 @@
    ══════════════════════════════════════════════ */
 (function () {
 
+  /* ── Google Analytics ── */
+  const _ga = document.createElement('script');
+  _ga.async = true;
+  _ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-7ZQ5T31FJ8';
+  document.head.appendChild(_ga);
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-7ZQ5T31FJ8');
+
   /* ── Browser tab title ── */
   document.title = 'Dadi AI';
   setInterval(() => { if (document.title !== 'Dadi AI') document.title = 'Dadi AI'; }, 500);
