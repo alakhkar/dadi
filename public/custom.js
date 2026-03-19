@@ -5,7 +5,12 @@
 
   /* ── Login page: white background + replace right-panel image with dadi.png ── */
   const loginCss = document.createElement('style');
-  loginCss.textContent = 'html,body{background:#ffffff!important;}';
+  loginCss.textContent = [
+    'html,body{background:#ffffff!important;}',
+    // Hide the persistent top-center logo on the login page only
+    'html.dadi-login::before{display:none!important;}',
+    'html.dadi-login #dadi-chat-logo{display:none!important;}',
+  ].join('');
   document.head.appendChild(loginCss);
 
   function styleLoginPage() {
@@ -19,6 +24,9 @@
     marker.id = 'dadi-page-styled';
     marker.style.display = 'none';
     document.body.appendChild(marker);
+
+    // Mark <html> so CSS can hide the logo on the login page
+    document.documentElement.classList.add('dadi-login');
 
     // White background on the panel itself
     rightPanel.style.background = '#ffffff';
@@ -249,8 +257,9 @@
     if (isLoginPage()) { styleLoginPage(); transformLoginForm(); }
   }).observe(document.body, { childList: true, subtree: true });
 
-  /* ── Persistent logo — re-inject into <html> if ever removed ── */
+  /* ── Persistent logo — re-inject into <html> if ever removed (chat page only) ── */
   function ensureLogo() {
+    if (isLoginPage()) return; // no logo on login page
     if (document.getElementById('dadi-chat-logo')) return;
     const el = document.createElement('div');
     el.id = 'dadi-chat-logo';
