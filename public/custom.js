@@ -3,67 +3,6 @@
    ══════════════════════════════════════════════ */
 (function () {
 
-  /* ── Login page styles: white bg + Dadi image column ── */
-  const loginStyles = document.createElement('style');
-  loginStyles.id = 'dadi-login-styles';
-  loginStyles.textContent = `
-    html, body, #root { background: #ffffff !important; }
-
-    #dadi-img-col {
-      flex-shrink: 0;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-    }
-    #dadi-img-col img {
-      height: 80vh;
-      max-height: 600px;
-      width: auto;
-      object-fit: contain;
-      object-position: bottom;
-      filter: drop-shadow(-4px 12px 28px rgba(80,20,30,0.18));
-      animation: dadi-float 4s ease-in-out infinite;
-    }
-    @keyframes dadi-float {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-14px); }
-    }
-    @media (max-width: 768px) {
-      #dadi-img-col { display: none !important; }
-    }
-  `;
-  document.head.appendChild(loginStyles);
-
-  function injectLoginImage() {
-    if (document.getElementById('dadi-img-col')) return;
-    const form = document.querySelector('form');
-    if (!form) return;
-
-    // Find the form's centering/layout ancestor to convert into a side-by-side row
-    let container = form.parentElement;
-    for (let i = 0; i < 8; i++) {
-      if (!container || container === document.body) break;
-      const cs = window.getComputedStyle(container);
-      if (cs.display === 'flex' || cs.display === 'grid' || cs.minHeight === '100vh') break;
-      container = container.parentElement;
-    }
-    if (!container || container === document.body) container = form.parentElement;
-
-    container.style.cssText = [
-      'display:flex', 'flex-direction:row', 'align-items:center',
-      'justify-content:center', 'gap:4rem', 'min-height:100vh',
-      'padding:2rem', 'background:#ffffff', 'box-sizing:border-box',
-    ].join(';');
-
-    const imgCol = document.createElement('div');
-    imgCol.id = 'dadi-img-col';
-    const img = document.createElement('img');
-    img.src = '/public/dadi.png';
-    img.alt = 'Dadi';
-    imgCol.appendChild(img);
-    container.appendChild(imgCol);
-  }
-
   /* ── Loading overlay — fades out once the chat textarea mounts ── */
   const overlay = document.createElement('div');
   overlay.id = 'dadi-overlay';
@@ -240,22 +179,16 @@
     form.appendChild(guestWrapper);
   }
 
-  // Poll until login form appears, then inject everything
+  // Poll until login form appears, then transform it
   const loginPoll = setInterval(() => {
-    if (isLoginPage()) {
-      injectLoginImage();
-      transformLoginForm();
-    }
+    if (isLoginPage()) transformLoginForm();
     if (document.getElementById('dadi-send-code-btn')) clearInterval(loginPoll);
   }, 200);
   setTimeout(() => clearInterval(loginPoll), 10000);
 
-  // Re-inject on SPA re-renders
+  // Re-transform on SPA re-renders
   new MutationObserver(() => {
-    if (isLoginPage()) {
-      injectLoginImage();
-      transformLoginForm();
-    }
+    if (isLoginPage()) transformLoginForm();
   }).observe(document.body, { childList: true, subtree: true });
 
   /* ── Persistent logo — re-inject into <html> if ever removed ── */
