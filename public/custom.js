@@ -106,18 +106,27 @@
       }
     };
 
-    // Insert Send Code + status between email and OTP fields
-    // Find the direct form child that wraps the OTP input
-    let otpWrapper = otpInput.parentElement;
-    while (otpWrapper && otpWrapper.parentElement !== form) {
-      otpWrapper = otpWrapper.parentElement;
+    // Insert Send Code + status after the email field, before the OTP field.
+    // Walk up from each input to find their branch within the nearest common ancestor.
+    function branchUnder(ancestor, el) {
+      let node = el;
+      while (node && node.parentElement !== ancestor) node = node.parentElement;
+      return node;
     }
-    if (otpWrapper) {
-      otpWrapper.insertAdjacentElement('beforebegin', status);
-      otpWrapper.insertAdjacentElement('beforebegin', sendBtn);
+    // Find nearest common ancestor of both inputs
+    const emailAncestors = new Set();
+    let n = emailInput;
+    while (n) { emailAncestors.add(n); n = n.parentElement; }
+    let common = otpInput.parentElement;
+    while (common && !emailAncestors.has(common)) common = common.parentElement;
+
+    const emailBranch = branchUnder(common || form, emailInput);
+    if (emailBranch) {
+      emailBranch.insertAdjacentElement('afterend', sendBtn);
+      sendBtn.insertAdjacentElement('afterend', status);
     } else {
-      submitBtn.insertAdjacentElement('beforebegin', status);
       submitBtn.insertAdjacentElement('beforebegin', sendBtn);
+      submitBtn.insertAdjacentElement('beforebegin', status);
     }
 
     // Continue as Guest button
