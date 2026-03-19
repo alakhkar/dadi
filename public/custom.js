@@ -3,6 +3,39 @@
    ══════════════════════════════════════════════ */
 (function () {
 
+  /* ── Login page: white background + replace right-panel image with dadi.png ── */
+  const loginCss = document.createElement('style');
+  loginCss.textContent = 'html,body{background:#ffffff!important;}';
+  document.head.appendChild(loginCss);
+
+  function styleLoginPage() {
+    if (document.getElementById('dadi-page-styled')) return;
+    // Chainlit's right panel: <div class="relative hidden bg-muted lg:block overflow-hidden">
+    const rightPanel = document.querySelector('div.relative.bg-muted');
+    if (!rightPanel) return;
+
+    document.getElementById('dadi-page-styled')?.remove();
+    const marker = document.createElement('span');
+    marker.id = 'dadi-page-styled';
+    marker.style.display = 'none';
+    document.body.appendChild(marker);
+
+    // White background on the panel itself
+    rightPanel.style.background = '#ffffff';
+
+    // Swap the image: remove dark filter, show dadi.png
+    const img = rightPanel.querySelector('img');
+    if (img) {
+      img.src = '/public/dadi.png';
+      img.alt = 'Dadi';
+      img.style.cssText = [
+        'position:absolute', 'inset:0', 'height:100%', 'width:100%',
+        'object-fit:contain', 'object-position:bottom center',
+        'filter:none', 'brightness:unset',
+      ].join(';');
+    }
+  }
+
   /* ── Loading overlay — fades out once the chat textarea mounts ── */
   const overlay = document.createElement('div');
   overlay.id = 'dadi-overlay';
@@ -179,16 +212,16 @@
     form.appendChild(guestWrapper);
   }
 
-  // Poll until login form appears, then transform it
+  // Poll until login form appears, then inject everything
   const loginPoll = setInterval(() => {
-    if (isLoginPage()) transformLoginForm();
+    if (isLoginPage()) { styleLoginPage(); transformLoginForm(); }
     if (document.getElementById('dadi-send-code-btn')) clearInterval(loginPoll);
   }, 200);
   setTimeout(() => clearInterval(loginPoll), 10000);
 
-  // Re-transform on SPA re-renders
+  // Re-run on SPA re-renders
   new MutationObserver(() => {
-    if (isLoginPage()) transformLoginForm();
+    if (isLoginPage()) { styleLoginPage(); transformLoginForm(); }
   }).observe(document.body, { childList: true, subtree: true });
 
   /* ── Persistent logo — re-inject into <html> if ever removed ── */
