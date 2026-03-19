@@ -2,11 +2,6 @@ import chainlit as cl
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 import os
 import json
-import uuid
-import random
-import string
-from datetime import datetime, timezone, timedelta
-from urllib.parse import unquote
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,12 +18,10 @@ from prompt import DADI_SYSTEM_PROMPT
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
 # ─────────────────────────────────────────────
-GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
-SUPABASE_URL   = os.environ["SUPABASE_URL"]
-SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
-DATABASE_URL   = os.environ["DATABASE_URL"]
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-EMAIL_FROM     = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
+GROQ_API_KEY  = os.environ["GROQ_API_KEY"]
+SUPABASE_URL  = os.environ["SUPABASE_URL"]
+SUPABASE_KEY  = os.environ["SUPABASE_KEY"]
+DATABASE_URL  = os.environ["DATABASE_URL"]
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER
@@ -102,65 +95,7 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
 
 # ─────────────────────────────────────────────
-# 5. OTP HELPERS
-# ─────────────────────────────────────────────
-def _generate_otp() -> str:
-    return "".join(random.choices(string.digits, k=6))
-
-async def _save_otp(email: str, code: str) -> bool:
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            f"{SUPABASE_URL}/rest/v1/otp_codes",
-            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-            json={"email": email, "code": code, "expires_at": expires_at},
-            timeout=10,
-        )
-    return r.status_code in (200, 201)
-
-async def _verify_otp(email: str, code: str) -> bool:
-    now = datetime.now(timezone.utc).isoformat()
-    async with httpx.AsyncClient() as client:
-        r = await client.get(
-            f"{SUPABASE_URL}/rest/v1/otp_codes"
-            f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
-            headers=SUPA_HEADERS,
-            timeout=10,
-        )
-        rows = r.json() if r.status_code == 200 else []
-        if not rows:
-            return False
-        await client.patch(
-            f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{rows[0]['id']}",
-            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-            json={"used": True},
-            timeout=10,
-        )
-    return True
-
-async def _send_otp_email(email: str, code: str) -> bool:
-    if not RESEND_API_KEY:
-        print(f"[OTP] No RESEND_API_KEY — code for {email}: {code}")
-        return True
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "from": EMAIL_FROM,
-                "to": [email],
-                "subject": "Your Dadi verification code",
-                "text": f"Your Dadi login code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, ignore this email.",
-            },
-            timeout=15,
-        )
-    if r.status_code != 200:
-        print(f"[OTP] Resend error: {r.text}")
-        return False
-    return True
-
-# ─────────────────────────────────────────────
-# 6. MEMORY HELPERS
+# 5. MEMORY HELPERS
 # ─────────────────────────────────────────────
 async def _get_memories(email: str) -> list[str]:
     try:
@@ -217,7 +152,7 @@ async def _extract_and_save_memories(email: str, messages: list):
         print(f"[Memory] Extraction failed: {e}")
 
 # ─────────────────────────────────────────────
-# 7. RAG — ENSURE PDF UPLOADED ON STARTUP
+# 6. RAG — ENSURE PDF UPLOADED ON STARTUP
 # ─────────────────────────────────────────────
 def ensure_knowledge_uploaded():
     try:
@@ -240,80 +175,26 @@ print("[Startup] Building Dadi's brain...")
 ensure_knowledge_uploaded()
 
 # ─────────────────────────────────────────────
-# 8. AUTH REST ENDPOINTS (OTP via popup)
+# 7. AUTH — Chainlit native login
 # ─────────────────────────────────────────────
-try:
-    from chainlit.server import app as _cl_app
-    from fastapi import Request
-    from fastapi.responses import JSONResponse
-
-    @_cl_app.post("/auth/request-otp")
-    async def auth_request_otp(request: Request):
-        try:
-            data = await request.json()
-        except Exception:
-            return JSONResponse({"error": "Invalid request"}, status_code=400)
-        email = data.get("email", "").strip().lower()
-        if not email or "@" not in email or "." not in email.split("@")[-1]:
-            return JSONResponse({"error": "Invalid email address"}, status_code=400)
-        code = _generate_otp()
-        if not await _save_otp(email, code):
-            return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
-        if not await _send_otp_email(email, code):
-            return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
-        return JSONResponse({"ok": True})
-
-    @_cl_app.post("/auth/verify-otp")
-    async def auth_verify_otp(request: Request):
-        try:
-            data = await request.json()
-        except Exception:
-            return JSONResponse({"error": "Invalid request"}, status_code=400)
-        email = data.get("email", "").strip().lower()
-        code = data.get("code", "").strip()
-        if not email or not code:
-            return JSONResponse({"error": "Email and code are required"}, status_code=400)
-        if not await _verify_otp(email, code):
-            return JSONResponse({"error": "Wrong or expired code — please try again"}, status_code=400)
-        return JSONResponse({"ok": True, "email": email})
-
-    print("[Auth] REST endpoints registered ✓")
-except Exception as e:
-    print(f"[Auth] REST endpoints not available: {e}")
+@cl.password_auth_callback
+def auth_callback(username: str, password: str):
+    email = username.strip().lower()
+    if email and "@" in email and "." in email.split("@")[-1]:
+        return cl.User(identifier=email, metadata={"role": "user"})
+    return None
 
 # ─────────────────────────────────────────────
-# 9. HEADER AUTH
-# ─────────────────────────────────────────────
-@cl.header_auth_callback
-def header_auth_callback(headers: dict):
-    dadi_user = None
-    dadi_guest = None
-    for part in headers.get("cookie", "").split(";"):
-        part = part.strip()
-        if part.startswith("dadi_user="):
-            dadi_user = unquote(part[len("dadi_user="):])
-        elif part.startswith("dadi_guest="):
-            dadi_guest = part[len("dadi_guest="):]
-    if dadi_user and "@" in dadi_user:
-        return cl.User(identifier=dadi_user, metadata={"role": "registered"})
-    guest_id = dadi_guest if dadi_guest else f"guest_{uuid.uuid4().hex[:8]}"
-    return cl.User(identifier=guest_id, metadata={"role": "guest"})
-
-# ─────────────────────────────────────────────
-# 10. CHAINLIT HANDLERS
+# 8. CHAINLIT HANDLERS
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
 
-    user = cl.context.session.user
-    if user and user.metadata.get("role") == "registered":
-        cl.user_session.set("registered_email", user.identifier)
-        cl.user_session.set("memories", await _get_memories(user.identifier))
-    else:
-        cl.user_session.set("registered_email", None)
-        cl.user_session.set("memories", [])
+    email = cl.context.session.user.identifier
+    cl.user_session.set("email", email)
+    cl.user_session.set("memories", await _get_memories(email))
 
     greeting = "*beta!* Finally you remembered your Dadi exists, haan?\n\nDadi is here. *Chalo, bol.*"
     await cl.Message(content=greeting, author="Dadi 👵🏾").send()
@@ -364,20 +245,20 @@ async def on_message(message: cl.Message):
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
 
-    registered_email = cl.user_session.get("registered_email")
+    email = cl.user_session.get("email")
     response_count = cl.user_session.get("response_count", 0) + 1
     cl.user_session.set("response_count", response_count)
 
-    if registered_email and response_count % 6 == 0:
-        await _extract_and_save_memories(registered_email, messages)
-        cl.user_session.set("memories", await _get_memories(registered_email))
+    if response_count % 6 == 0:
+        await _extract_and_save_memories(email, messages)
+        cl.user_session.set("memories", await _get_memories(email))
 
 
 @cl.on_chat_end
 async def on_end():
-    registered_email = cl.user_session.get("registered_email")
-    if not registered_email:
+    email = cl.user_session.get("email")
+    if not email:
         return
     messages = cl.user_session.get("messages", [])
-    print(f"[Memory] Session ended — extracting for {registered_email}")
-    await _extract_and_save_memories(registered_email, messages)
+    print(f"[Memory] Session ended — extracting for {email}")
+    await _extract_and_save_memories(email, messages)
