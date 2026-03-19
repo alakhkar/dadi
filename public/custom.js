@@ -24,45 +24,125 @@
   overlayObs.observe(document.body, { childList: true, subtree: true });
   setTimeout(fadeOverlay, 3000); // hard fallback
 
-  /* ── Skip login button — injected into Chainlit's login form ── */
+  /* ── OTP login UI — injected into Chainlit's native login form ──
+     Layout after injection:
+       [Email field]
+       [Send Code button]  ← injected
+       [Status message]    ← injected
+       [Password/OTP field]
+       [Sign In button]
+       [Continue as Guest] ← injected
+  ── */
+
   function isLoginPage() {
     return !!document.querySelector('form input[type="password"]');
   }
 
-  function injectSkipButton() {
-    if (document.getElementById('dadi-skip-wrapper')) return;
-    const submitBtn = document.querySelector('button[type="submit"]');
-    if (!submitBtn) return;
+  function transformLoginForm() {
+    if (document.getElementById('dadi-send-code-btn')) return;
+    const form = document.querySelector('form');
+    if (!form) return;
+    const emailInput = form.querySelector('input:not([type="password"])');
+    const otpInput   = form.querySelector('input[type="password"]');
+    const submitBtn  = form.querySelector('button[type="submit"]');
+    if (!emailInput || !otpInput || !submitBtn) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.id = 'dadi-skip-wrapper';
-    wrapper.style.cssText = 'display:flex;align-items:center;gap:0.6rem;margin-top:0.85rem;justify-content:center;';
+    // Repurpose the password field as OTP input
+    otpInput.placeholder = '6-digit code from your email';
+    otpInput.setAttribute('inputmode', 'numeric');
+    otpInput.setAttribute('maxlength', '6');
+    otpInput.setAttribute('autocomplete', 'one-time-code');
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = 'Continue as Guest →';
-    btn.style.cssText = [
-      'background:none',
-      'border:1px solid rgba(139,26,26,0.35)',
-      'border-radius:999px',
-      'color:#8B1A1A',
-      'font-size:0.78rem',
-      'padding:0.35rem 1rem',
-      'cursor:pointer',
-      'font-style:italic',
-      'transition:background 0.2s',
-      'white-space:nowrap',
+    // Status line
+    const status = document.createElement('p');
+    status.id = 'dadi-otp-status';
+    status.style.cssText = 'margin:2px 0 6px;font-size:0.8rem;min-height:1.1em;text-align:center;';
+
+    // Send Code button
+    const sendBtn = document.createElement('button');
+    sendBtn.id = 'dadi-send-code-btn';
+    sendBtn.type = 'button';
+    sendBtn.textContent = 'Send Code';
+    sendBtn.style.cssText = [
+      'width:100%', 'padding:10px', 'background:#8B1A1A', 'color:#fff',
+      'border:none', 'border-radius:8px', 'font-size:0.9rem', 'cursor:pointer',
+      'margin-bottom:4px', 'transition:opacity 0.2s',
     ].join(';');
-    btn.onmouseenter = () => { btn.style.background = 'rgba(139,26,26,0.06)'; };
-    btn.onmouseleave = () => { btn.style.background = 'none'; };
 
-    const note = document.createElement('span');
-    note.textContent = "Chat history won't be saved.";
-    note.style.cssText = 'font-size:0.67rem;color:#9e7a5a;font-style:italic;line-height:1.3;';
+    sendBtn.onclick = async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      status.style.color = '#c0392b';
+      if (!email || !email.includes('@') || !email.split('@')[1]?.includes('.')) {
+        status.textContent = 'Enter a valid email address first.';
+        return;
+      }
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = '0.6';
+      sendBtn.textContent = 'Sending…';
+      status.textContent = '';
+      try {
+        const resp = await fetch('/auth/request-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          status.style.color = '#2e7d32';
+          status.textContent = `Code sent to ${email}`;
+          sendBtn.textContent = 'Resend Code';
+          otpInput.value = '';
+          otpInput.focus();
+        } else {
+          status.textContent = data.error || 'Failed to send code.';
+          sendBtn.textContent = 'Send Code';
+        }
+      } catch (_) {
+        status.textContent = 'Network error — please try again.';
+        sendBtn.textContent = 'Send Code';
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+      }
+    };
 
-    btn.onclick = async () => {
-      btn.disabled = true;
-      btn.textContent = 'Entering…';
+    // Insert Send Code + status between email and OTP fields
+    // Find the direct form child that wraps the OTP input
+    let otpWrapper = otpInput.parentElement;
+    while (otpWrapper && otpWrapper.parentElement !== form) {
+      otpWrapper = otpWrapper.parentElement;
+    }
+    if (otpWrapper) {
+      otpWrapper.insertAdjacentElement('beforebegin', status);
+      otpWrapper.insertAdjacentElement('beforebegin', sendBtn);
+    } else {
+      submitBtn.insertAdjacentElement('beforebegin', status);
+      submitBtn.insertAdjacentElement('beforebegin', sendBtn);
+    }
+
+    // Continue as Guest button
+    const guestWrapper = document.createElement('div');
+    guestWrapper.id = 'dadi-skip-wrapper';
+    guestWrapper.style.cssText = 'display:flex;align-items:center;gap:0.6rem;margin-top:0.85rem;justify-content:center;';
+
+    const guestBtn = document.createElement('button');
+    guestBtn.type = 'button';
+    guestBtn.textContent = 'Continue as Guest →';
+    guestBtn.style.cssText = [
+      'background:none', 'border:1px solid rgba(139,26,26,0.35)', 'border-radius:999px',
+      'color:#8B1A1A', 'font-size:0.78rem', 'padding:0.35rem 1rem', 'cursor:pointer',
+      'font-style:italic', 'transition:background 0.2s', 'white-space:nowrap',
+    ].join(';');
+    guestBtn.onmouseenter = () => { guestBtn.style.background = 'rgba(139,26,26,0.06)'; };
+    guestBtn.onmouseleave = () => { guestBtn.style.background = 'none'; };
+
+    const guestNote = document.createElement('span');
+    guestNote.textContent = "Chat history won't be saved.";
+    guestNote.style.cssText = 'font-size:0.67rem;color:#9e7a5a;font-style:italic;line-height:1.3;';
+
+    guestBtn.onclick = async () => {
+      guestBtn.disabled = true;
+      guestBtn.textContent = 'Entering…';
       const guestId = 'guest_' + Math.random().toString(36).slice(2, 8);
       try {
         const resp = await fetch('/login', {
@@ -76,32 +156,30 @@
           if (data.access_token) localStorage.setItem('access_token', data.access_token);
           window.location.href = '/';
         } else {
-          btn.textContent = 'Continue as Guest →';
-          btn.disabled = false;
+          guestBtn.textContent = 'Continue as Guest →';
+          guestBtn.disabled = false;
         }
       } catch (_) {
-        btn.textContent = 'Continue as Guest →';
-        btn.disabled = false;
+        guestBtn.textContent = 'Continue as Guest →';
+        guestBtn.disabled = false;
       }
     };
 
-    wrapper.appendChild(btn);
-    wrapper.appendChild(note);
-    const formEl = submitBtn.closest('form');
-    if (formEl) formEl.appendChild(wrapper);
-    else submitBtn.parentNode.insertAdjacentElement('afterend', wrapper);
+    guestWrapper.appendChild(guestBtn);
+    guestWrapper.appendChild(guestNote);
+    form.appendChild(guestWrapper);
   }
 
-  // Poll until the login form appears, then inject the button
-  const skipPoll = setInterval(() => {
-    if (isLoginPage()) injectSkipButton();
-    if (document.getElementById('dadi-skip-wrapper')) clearInterval(skipPoll);
+  // Poll until login form appears, then transform it
+  const loginPoll = setInterval(() => {
+    if (isLoginPage()) transformLoginForm();
+    if (document.getElementById('dadi-send-code-btn')) clearInterval(loginPoll);
   }, 200);
-  setTimeout(() => clearInterval(skipPoll), 10000);
+  setTimeout(() => clearInterval(loginPoll), 10000);
 
-  // Re-inject if Chainlit re-renders the form (SPA navigation)
+  // Re-transform on SPA re-renders
   new MutationObserver(() => {
-    if (isLoginPage()) injectSkipButton();
+    if (isLoginPage()) transformLoginForm();
   }).observe(document.body, { childList: true, subtree: true });
 
   /* ── Persistent logo — re-inject into <html> if ever removed ── */

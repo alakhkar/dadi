@@ -2,6 +2,9 @@ import chainlit as cl
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 import os
 import json
+import random
+import string
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,10 +21,12 @@ from prompt import DADI_SYSTEM_PROMPT
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
 # ─────────────────────────────────────────────
-GROQ_API_KEY  = os.environ["GROQ_API_KEY"]
-SUPABASE_URL  = os.environ["SUPABASE_URL"]
-SUPABASE_KEY  = os.environ["SUPABASE_KEY"]
-DATABASE_URL  = os.environ["DATABASE_URL"]
+GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
+SUPABASE_URL   = os.environ["SUPABASE_URL"]
+SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
+DATABASE_URL   = os.environ["DATABASE_URL"]
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+EMAIL_FROM     = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER
@@ -95,7 +100,70 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
 
 # ─────────────────────────────────────────────
-# 5. MEMORY HELPERS
+# 5. OTP HELPERS
+# ─────────────────────────────────────────────
+def _generate_otp() -> str:
+    return "".join(random.choices(string.digits, k=6))
+
+async def _save_otp(email: str, code: str) -> bool:
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{SUPABASE_URL}/rest/v1/otp_codes",
+            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+            json={"email": email, "code": code, "expires_at": expires_at},
+            timeout=10,
+        )
+    return r.status_code in (200, 201)
+
+def _verify_otp_sync(email: str, code: str) -> bool:
+    """Synchronous OTP check — safe to call from @cl.password_auth_callback."""
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        with httpx.Client() as client:
+            r = client.get(
+                f"{SUPABASE_URL}/rest/v1/otp_codes"
+                f"?email=eq.{email}&code=eq.{code}&used=eq.false&expires_at=gt.{now}&select=id&limit=1",
+                headers=SUPA_HEADERS,
+                timeout=10,
+            )
+            rows = r.json() if r.status_code == 200 else []
+            if not rows:
+                return False
+            client.patch(
+                f"{SUPABASE_URL}/rest/v1/otp_codes?id=eq.{rows[0]['id']}",
+                headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
+                json={"used": True},
+                timeout=10,
+            )
+        return True
+    except Exception as e:
+        print(f"[OTP] Verify error: {e}")
+        return False
+
+async def _send_otp_email(email: str, code: str) -> bool:
+    if not RESEND_API_KEY:
+        print(f"[OTP] No RESEND_API_KEY — code for {email}: {code}")
+        return True
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": EMAIL_FROM,
+                "to": [email],
+                "subject": "Your Dadi verification code",
+                "text": f"Your Dadi login code is: {code}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, ignore this email.",
+            },
+            timeout=15,
+        )
+    if r.status_code != 200:
+        print(f"[OTP] Resend error: {r.text}")
+        return False
+    return True
+
+# ─────────────────────────────────────────────
+# 6. MEMORY HELPERS
 # ─────────────────────────────────────────────
 async def _get_memories(email: str) -> list[str]:
     try:
@@ -175,22 +243,51 @@ print("[Startup] Building Dadi's brain...")
 ensure_knowledge_uploaded()
 
 # ─────────────────────────────────────────────
-# 7. AUTH — Chainlit native login
+# 7. OTP REST ENDPOINT
+# ─────────────────────────────────────────────
+try:
+    from chainlit.server import app as _cl_app
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @_cl_app.post("/auth/request-otp")
+    async def auth_request_otp(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid request"}, status_code=400)
+        email = data.get("email", "").strip().lower()
+        if not email or "@" not in email or "." not in email.split("@")[-1]:
+            return JSONResponse({"error": "Invalid email address"}, status_code=400)
+        code = _generate_otp()
+        if not await _save_otp(email, code):
+            return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
+        if not await _send_otp_email(email, code):
+            return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
+        return JSONResponse({"ok": True})
+
+    print("[Auth] OTP endpoint registered ✓")
+except Exception as e:
+    print(f"[Auth] OTP endpoint not available: {e}")
+
+# ─────────────────────────────────────────────
+# 8. AUTH — Chainlit native login with OTP
 # ─────────────────────────────────────────────
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
-    # Guest skip: any username with password "guest"
+    # Guest skip
     if password == "guest":
         guest_id = username if username.startswith("guest_") else f"guest_{username}"
         return cl.User(identifier=guest_id, metadata={"role": "guest"})
-    # Registered: valid email as username, any non-empty password
+    # OTP login: username = email, password = 6-digit code
     email = username.strip().lower()
     if email and "@" in email and "." in email.split("@")[-1]:
-        return cl.User(identifier=email, metadata={"role": "user"})
+        if _verify_otp_sync(email, password.strip()):
+            return cl.User(identifier=email, metadata={"role": "user"})
     return None
 
 # ─────────────────────────────────────────────
-# 8. CHAINLIT HANDLERS
+# 9. CHAINLIT HANDLERS
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
