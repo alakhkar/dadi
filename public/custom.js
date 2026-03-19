@@ -114,7 +114,7 @@
     `;
 
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    document.documentElement.appendChild(backdrop);
 
     let pendingEmail = '';
 
