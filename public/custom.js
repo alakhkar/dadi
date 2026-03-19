@@ -5,9 +5,7 @@
 
   /* ── Browser tab title ── */
   document.title = 'Dadi AI';
-  new MutationObserver(() => {
-    if (document.title !== 'Dadi AI') document.title = 'Dadi AI';
-  }).observe(document.querySelector('title') || document.head, { childList: true, characterData: true, subtree: true });
+  setInterval(() => { if (document.title !== 'Dadi AI') document.title = 'Dadi AI'; }, 500);
 
   /* ── Login page: white background + replace right-panel image with dadi.png ── */
   const loginCss = document.createElement('style');
