@@ -34,7 +34,32 @@
         'filter:none', 'brightness:unset',
       ].join(';');
     }
+
+    // Colour headings + labels to match the Sign In button (#8B1A1A)
+    document.querySelectorAll('form h1, form h2, form h3, form label').forEach(el => {
+      el.style.color = '#8B1A1A';
+    });
+
+    // Also catch the login page title which sits above the form
+    document.querySelectorAll('h1, h2').forEach(el => {
+      if (el.closest('form') || el.textContent.toLowerCase().includes('login') || el.textContent.toLowerCase().includes('access')) {
+        el.style.color = '#8B1A1A';
+      }
+    });
+
+    // White background on all inputs
+    document.querySelectorAll('form input').forEach(el => {
+      el.style.backgroundColor = '#ffffff';
+    });
   }
+
+  /* ── Persist login page text/input colours on re-renders ── */
+  const loginColorCss = document.createElement('style');
+  loginColorCss.textContent = `
+    form h1, form h2, form h3, form label { color: #8B1A1A !important; }
+    form input { background-color: #ffffff !important; }
+  `;
+  document.head.appendChild(loginColorCss);
 
   /* ── Loading overlay — fades out once the chat textarea mounts ── */
   const overlay = document.createElement('div');
