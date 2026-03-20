@@ -320,10 +320,6 @@ async def on_start():
     cl.user_session.set("email", email)
     cl.user_session.set("memories", await _get_memories(email) if email else [])
 
-    greeting = "*beta!* Finally you remembered your Dadi exists, haan?\n\nDadi is here. *Chalo, bol.*"
-    await cl.Message(content=greeting, author="Dadi 👵🏾").send()
-    cl.user_session.set("messages", [{"role": "assistant", "content": greeting}])
-
 
 @cl.on_message
 async def on_message(message: cl.Message):
