@@ -17,6 +17,7 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
 from prompt import DADI_SYSTEM_PROMPT
+from starters import STARTER_SETS
 
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
@@ -294,7 +295,19 @@ def auth_callback(username: str, password: str):
     return None
 
 # ─────────────────────────────────────────────
-# 9. CHAINLIT HANDLERS
+# 9. STARTER PROMPTS
+# ─────────────────────────────────────────────
+@cl.set_starters
+async def set_starters():
+    import random
+    return [
+        cl.Starter(label=label, message=message)
+        for label, message in random.choice(STARTER_SETS)
+    ]
+
+
+# ─────────────────────────────────────────────
+# 10. CHAINLIT HANDLERS
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
