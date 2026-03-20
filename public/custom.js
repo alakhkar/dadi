@@ -13,9 +13,14 @@
   gtag('js', new Date());
   gtag('config', 'G-7ZQ5T31FJ8');
 
-  /* ── Browser tab title ── */
+  /* ── Browser tab title + favicon ── */
   document.title = 'Dadi AI';
   setInterval(() => { if (document.title !== 'Dadi AI') document.title = 'Dadi AI'; }, 500);
+  const _favicon = document.createElement('link');
+  _favicon.rel = 'icon';
+  _favicon.type = 'image/png';
+  _favicon.href = '/public/favicon.png';
+  document.head.appendChild(_favicon);
 
   /* ── Login page: white background + replace right-panel image with dadi.png ── */
   const loginCss = document.createElement('style');
