@@ -288,6 +288,19 @@
   ensureLogo();
   new MutationObserver(ensureLogo).observe(document.documentElement, { childList: true });
 
+  /* ── Replace disclaimer text ── */
+  function fixDisclaimer() {
+    document.querySelectorAll('*').forEach(el => {
+      if (el.childNodes.length === 1 && el.childNodes[0].nodeType === Node.TEXT_NODE) {
+        if (el.childNodes[0].textContent.includes('LLMs can make mistakes')) {
+          el.childNodes[0].textContent = el.childNodes[0].textContent.replace('LLMs can make mistakes', 'Dadi can make mistakes');
+        }
+      }
+    });
+  }
+  fixDisclaimer();
+  new MutationObserver(fixDisclaimer).observe(document.body, { childList: true, subtree: true });
+
   /* ── Hide readme button ── */
   function hideReadmeButton() {
     document.querySelectorAll('a[href="/readme"], a[href*="readme"]').forEach(el => {
