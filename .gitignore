@@ -3,5 +3,6 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
-.chainlit/
+.chainlit/*
+!.chainlit/config.toml
 *.log

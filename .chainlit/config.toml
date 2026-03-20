@@ -1,0 +1,7 @@
+[project]
+enable_telemetry = false
+
+[UI]
+name = "Dadi AI"
+description = "Your AI grandmother — wise, warm, and always there for you."
+favicon = "/public/favicon.png"
