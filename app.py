@@ -18,16 +18,20 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
 from prompt import DADI_SYSTEM_PROMPT
 from starters import STARTER_SETS
+import analytics
 
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
 # ─────────────────────────────────────────────
-GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
-SUPABASE_URL   = os.environ["SUPABASE_URL"]
-SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
-DATABASE_URL   = os.environ["DATABASE_URL"]
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-EMAIL_FROM     = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
+GROQ_API_KEY          = os.environ["GROQ_API_KEY"]
+SUPABASE_URL          = os.environ["SUPABASE_URL"]
+SUPABASE_KEY          = os.environ["SUPABASE_KEY"]
+DATABASE_URL          = os.environ["DATABASE_URL"]
+RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
+EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
+ANALYTICS_ADMIN_TOKEN = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
+
+analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER
@@ -199,9 +203,10 @@ async def _save_memory(email: str, memory: str):
     except Exception as e:
         print(f"[Memory] Save error: {e}")
 
-async def _extract_and_save_memories(email: str, messages: list):
+async def _extract_and_save_memories(email: str, messages: list) -> int:
+    """Returns number of facts saved."""
     if len(messages) < 4:
-        return
+        return 0
     convo = "\n".join(
         f"{'User' if m['role'] == 'user' else 'Dadi'}: {m['content'][:300]}"
         for m in messages[-10:]
@@ -214,6 +219,7 @@ async def _extract_and_save_memories(email: str, messages: list):
         'Example: ["Name is Priya", "Lives in Pune", "Has board exams next month"]\n\n'
         f"Conversation:\n{convo}"
     )
+    saved = 0
     try:
         response = await LLM.ainvoke([HumanMessage(content=prompt)])
         text = response.content.strip()
@@ -224,8 +230,10 @@ async def _extract_and_save_memories(email: str, messages: list):
             if isinstance(fact, str) and len(fact) > 5:
                 await _save_memory(email, fact)
                 print(f"[Memory] Saved for {email}: {fact}")
+                saved += 1
     except Exception as e:
         print(f"[Memory] Extraction failed: {e}")
+    return saved
 
 # ─────────────────────────────────────────────
 # 6. RAG — ENSURE PDF UPLOADED ON STARTUP
@@ -254,9 +262,11 @@ ensure_knowledge_uploaded()
 # 7. OTP REST ENDPOINT
 # ─────────────────────────────────────────────
 try:
+    import asyncio as _asyncio
     from chainlit.server import app as _cl_app
     from fastapi import Request
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, HTMLResponse
+    from dashboard import build_dashboard_html
 
     @_cl_app.post("/auth/request-otp")
     async def auth_request_otp(request: Request):
@@ -272,9 +282,41 @@ try:
             return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
         if not await _send_otp_email(email, code):
             return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
+        _asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
 
+    @_cl_app.get("/admin/analytics")
+    async def admin_analytics_dashboard(request: Request):
+        provided = (
+            request.query_params.get("token") or
+            request.headers.get("Authorization", "").replace("Bearer ", "")
+        )
+        if not ANALYTICS_ADMIN_TOKEN or provided != ANALYTICS_ADMIN_TOKEN:
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+        views = [
+            "v_kpi_summary", "v_dau", "v_user_type_ratio", "v_rag_usage",
+            "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
+        ]
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            responses = await _asyncio.gather(*[
+                client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
+                for v in views
+            ], return_exceptions=True)
+
+        data = {}
+        for view, resp in zip(views, responses):
+            if isinstance(resp, Exception):
+                data[view] = []
+            elif resp.status_code == 200:
+                data[view] = resp.json()
+            else:
+                data[view] = []
+
+        return HTMLResponse(content=build_dashboard_html(data))
+
     print("[Auth] OTP endpoint registered ✓")
+    print("[Analytics] Admin dashboard registered at /admin/analytics ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
@@ -283,15 +325,21 @@ except Exception as e:
 # ─────────────────────────────────────────────
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
+    import asyncio as _asyncio
+    loop = _asyncio.get_event_loop()
     # Guest skip
     if password == "guest":
         guest_id = username if username.startswith("guest_") else f"guest_{username}"
+        loop.create_task(analytics.log_guest_login())
         return cl.User(identifier=guest_id, metadata={"role": "guest"})
     # OTP login: username = email, password = 6-digit code
     email = username.strip().lower()
     if email and "@" in email and "." in email.split("@")[-1]:
         if _verify_otp_sync(email, password.strip()):
+            loop.create_task(analytics.log_otp_verified(email))
             return cl.User(identifier=email, metadata={"role": "user"})
+        else:
+            loop.create_task(analytics.log_otp_failed())
     return None
 
 # ─────────────────────────────────────────────
@@ -317,19 +365,31 @@ async def on_start():
     user = cl.context.session.user
     is_guest = user.metadata.get("role") == "guest"
     email = None if is_guest else user.identifier
+    memories = await _get_memories(email) if email else []
     cl.user_session.set("email", email)
-    cl.user_session.set("memories", await _get_memories(email) if email else [])
+    cl.user_session.set("is_guest", is_guest)
+    cl.user_session.set("memories", memories)
+    cl.user_session.set("session_started_at", datetime.now(timezone.utc))
+
+    await analytics.log_session_start(
+        session_id=cl.context.session.id,
+        user_email=email,
+        user_type="guest" if is_guest else "registered",
+        memory_count=len(memories),
+    )
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
     user_text = message.content
     messages = cl.user_session.get("messages", [])
+    message_index = len([m for m in messages if m["role"] == "user"])  # 0-based before append
     messages.append({"role": "user", "content": user_text})
 
     msg = cl.Message(content="", author="Dadi 👵🏾")
     await msg.send()
     full_reply = ""
+    rag_used, rag_doc_count = False, 0
 
     try:
         history_msgs = [
@@ -348,6 +408,7 @@ async def on_message(message: cl.Message):
         try:
             docs = await _retrieve(user_text)
             if docs:
+                rag_used, rag_doc_count = True, len(docs)
                 rag_context = "\n\n---\nDadi's ancient knowledge (use only if relevant):\n" + "\n\n".join(d.page_content for d in docs)
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
@@ -366,19 +427,58 @@ async def on_message(message: cl.Message):
     cl.user_session.set("messages", messages)
 
     email = cl.user_session.get("email")
+    is_guest = cl.user_session.get("is_guest", True)
+    user_type = "guest" if is_guest else "registered"
     response_count = cl.user_session.get("response_count", 0) + 1
     cl.user_session.set("response_count", response_count)
 
+    await analytics.log_message(
+        session_id=cl.context.session.id,
+        user_email=email,
+        user_type=user_type,
+        message_index=message_index,
+        user_text=user_text,
+        rag_used=rag_used,
+        rag_doc_count=rag_doc_count,
+    )
+
     if response_count % 6 == 0:
-        await _extract_and_save_memories(email, messages)
+        facts_saved = await _extract_and_save_memories(email, messages)
         cl.user_session.set("memories", await _get_memories(email))
+        await analytics.log_memory_extracted(
+            session_id=cl.context.session.id,
+            user_email=email,
+            user_type=user_type,
+            facts_count=facts_saved,
+            trigger="periodic",
+        )
 
 
 @cl.on_chat_end
 async def on_end():
     email = cl.user_session.get("email")
-    if not email:
-        return
+    is_guest = cl.user_session.get("is_guest", True)
+    user_type = "guest" if is_guest else "registered"
     messages = cl.user_session.get("messages", [])
-    print(f"[Memory] Session ended — extracting for {email}")
-    await _extract_and_save_memories(email, messages)
+    started_at = cl.user_session.get("session_started_at")
+    session_id = cl.context.session.id
+    user_message_count = len([m for m in messages if m["role"] == "user"])
+
+    if email:
+        print(f"[Memory] Session ended — extracting for {email}")
+        facts_saved = await _extract_and_save_memories(email, messages)
+        await analytics.log_memory_extracted(
+            session_id=session_id,
+            user_email=email,
+            user_type=user_type,
+            facts_count=facts_saved,
+            trigger="session_end",
+        )
+
+    await analytics.log_session_end(
+        session_id=session_id,
+        user_email=email,
+        user_type=user_type,
+        message_count=user_message_count,
+        started_at=started_at,
+    )

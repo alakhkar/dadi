@@ -13,6 +13,13 @@
   gtag('js', new Date());
   gtag('config', 'G-7ZQ5T31FJ8');
 
+  /* ── GA4: track login vs chat page context ── */
+  setTimeout(() => {
+    gtag('event', 'page_context', {
+      page_type: document.querySelector('form input[type="password"]') ? 'login' : 'chat'
+    });
+  }, 1000);
+
   /* ── Browser tab title + favicon ── */
   document.title = 'Dadi AI';
   setInterval(() => { if (document.title !== 'Dadi AI') document.title = 'Dadi AI'; }, 500);
@@ -94,10 +101,33 @@
   overlay.style.cssText = 'position:fixed;inset:0;background:#FDF6F0;z-index:99998;';
   document.documentElement.appendChild(overlay);
 
+  let _firstMsgTracked = false;
+  function trackChatEngagement() {
+    // First message sent
+    const textarea = document.querySelector('textarea');
+    if (textarea && !textarea.dataset.gaTracked) {
+      textarea.dataset.gaTracked = '1';
+      textarea.closest('form')?.addEventListener('submit', () => {
+        if (!_firstMsgTracked) { _firstMsgTracked = true; gtag('event', 'first_message_sent'); }
+      });
+    }
+    // Starter prompt clicked (delegated, one-time setup)
+    if (!document.body.dataset.starterTracked) {
+      document.body.dataset.starterTracked = '1';
+      document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const parent = btn.closest('[class*="starter"], [data-testid*="starter"]');
+        if (parent) gtag('event', 'starter_prompt_clicked', { starter_label: btn.textContent?.trim() });
+      });
+    }
+  }
+
   function fadeOverlay() {
     overlay.style.transition = 'opacity 0.3s';
     overlay.style.opacity = '0';
     setTimeout(() => overlay.remove(), 350);
+    trackChatEngagement();
   }
 
   const overlayObs = new MutationObserver(() => {
@@ -176,6 +206,7 @@
           status.style.color = '#2e7d32';
           status.textContent = `Code sent to ${email}`;
           sendBtn.textContent = 'Resend Code';
+          gtag('event', 'otp_code_sent', { method: 'email' });
           otpInput.value = '';
           otpInput.focus();
         } else {
@@ -214,6 +245,14 @@
       submitBtn.insertAdjacentElement('beforebegin', status);
     }
 
+    // GA4: track Sign In button click
+    if (submitBtn && !submitBtn.dataset.gaTracked) {
+      submitBtn.dataset.gaTracked = '1';
+      submitBtn.addEventListener('click', () => {
+        gtag('event', 'login_attempted', { method: 'otp' });
+      });
+    }
+
     // Continue as Guest button
     const guestWrapper = document.createElement('div');
     guestWrapper.id = 'dadi-skip-wrapper';
@@ -235,6 +274,7 @@
     guestNote.style.cssText = 'font-size:0.67rem;color:#9e7a5a;font-style:italic;line-height:1.3;';
 
     guestBtn.onclick = async () => {
+      gtag('event', 'guest_login_clicked');
       guestBtn.disabled = true;
       guestBtn.textContent = 'Entering…';
       const guestId = 'guest_' + Math.random().toString(36).slice(2, 8);
