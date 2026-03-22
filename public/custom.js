@@ -661,18 +661,24 @@
   const _iconBtnSel = 'button.h-9:not(.dadi-share-btn)';
 
   function findActionBar(article) {
-    // Walk UP from the article; at each level search DOWN for h-9 buttons
-    // that are NOT inside the article itself. First match = action bar container.
-    let el = article.parentElement;
-    for (let depth = 0; depth < 10 && el && el !== document.body; depth++) {
-      const btns = Array.from(el.querySelectorAll(_iconBtnSel))
-        .filter(b => !article.contains(b));
-      if (btns.length > 0) {
-        // Return the direct parent of the first button (the flex row container)
-        const bar = btns[0].parentElement;
-        return (bar && bar !== document.body) ? bar : el;
+    // Walk up the ancestor chain; at each level check SIBLINGS of the current node
+    // (not global descendants) to avoid matching buttons elsewhere in the page.
+    let current = article;
+    for (let depth = 0; depth < 10; depth++) {
+      const parent = current.parentElement;
+      if (!parent || parent === document.body) break;
+
+      for (const sibling of parent.children) {
+        if (sibling === current || sibling.contains(current)) continue;
+        const btns = Array.from(sibling.querySelectorAll(_iconBtnSel));
+        if (btns.length > 0) {
+          // btns[0] is the copy button (first in DOM order); its parent is the action bar
+          const bar = btns[0].parentElement;
+          return (bar && bar !== document.body) ? bar : sibling;
+        }
       }
-      el = el.parentElement;
+
+      current = parent;
     }
     return null;
   }
