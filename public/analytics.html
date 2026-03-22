@@ -10,7 +10,7 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', sans-serif; background: #FDF6F0; color: #2d1a10; padding: 2rem; min-height: 100vh; }
   h1 { font-family: 'Playfair Display', serif; color: #8B1A1A; font-size: 1.8rem; margin-bottom: 0.25rem; }
-  .subtitle { color: #9e7a5a; font-size: 0.85rem; margin-bottom: 2rem; }
+  .subtitle { color: #9e7a5a; font-size: 0.85rem; margin-bottom: 1.5rem; }
   #loading { text-align: center; padding: 4rem; color: #9e7a5a; font-size: 1rem; }
   #error   { text-align: center; padding: 4rem; color: #c0392b; font-size: 1rem; }
   #content { display: none; }
@@ -28,6 +28,33 @@
   .funnel-card .flabel { font-size: 0.7rem; color: #9e7a5a; text-transform: uppercase; }
   .conversion-badge { text-align: center; font-size: 0.85rem; color: #2e7d32; font-weight: 500; margin-top: 0.5rem; }
 
+  /* Date range filter bar */
+  .date-filter-bar {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    background: #fff; border: 1px solid #f0d9c8; border-radius: 12px;
+    padding: 0.9rem 1.25rem; margin-bottom: 2rem;
+    box-shadow: 0 1px 4px rgba(139,26,26,.06);
+  }
+  .date-filter-bar label { font-size: 0.8rem; font-weight: 500; color: #8B1A1A; white-space: nowrap; }
+  .date-filter-bar input[type="date"] {
+    padding: 5px 10px; border: 1px solid #f0d9c8; border-radius: 8px;
+    font-size: 0.8rem; background: #FDF6F0; color: #2d1a10; outline: none;
+    font-family: 'Inter', sans-serif; cursor: pointer;
+  }
+  .date-filter-bar input[type="date"]:focus { border-color: #8B1A1A; }
+  .date-filter-bar .df-sep { color: #9e7a5a; font-size: 0.8rem; }
+  .date-filter-bar .btn-apply {
+    padding: 5px 14px; background: #8B1A1A; color: #fff; border: none;
+    border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-family: 'Inter', sans-serif;
+  }
+  .date-filter-bar .btn-apply:hover { background: #6e1414; }
+  .date-filter-bar .btn-reset {
+    padding: 5px 14px; background: #fff; color: #8B1A1A; border: 1px solid #f0d9c8;
+    border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-family: 'Inter', sans-serif;
+  }
+  .date-filter-bar .btn-reset:hover { background: #FEF0E7; }
+  .date-filter-note { font-size: 0.7rem; color: #9e7a5a; margin-left: auto; }
+
   /* Audit table */
   .audit-section { margin-top: 2.5rem; }
   .audit-section h2 { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: #8B1A1A; margin-bottom: 1rem; }
@@ -37,7 +64,10 @@
     font-size: 0.8rem; background: #fff; color: #2d1a10; outline: none;
     font-family: 'Inter', sans-serif;
   }
-  .audit-toolbar input { width: 220px; }
+  .audit-toolbar input[type="text"] { width: 200px; }
+  .audit-toolbar input[type="date"] { background: #FDF6F0; cursor: pointer; }
+  .audit-toolbar input[type="date"]:focus { border-color: #8B1A1A; }
+  .audit-toolbar .df-sep { font-size: 0.75rem; color: #9e7a5a; }
   .audit-count { font-size: 0.75rem; color: #9e7a5a; margin-left: auto; }
   .audit-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #f0d9c8; box-shadow: 0 1px 4px rgba(139,26,26,.06); }
   table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.78rem; }
@@ -66,6 +96,53 @@
     background: #fff; color: #8B1A1A; cursor: pointer; font-size: 0.78rem;
   }
   .audit-pagination button:disabled { opacity: 0.4; cursor: default; }
+
+  /* Session view button */
+  .btn-session {
+    display: inline-block; padding: 1px 6px; border: 1px solid #f0d9c8;
+    border-radius: 5px; font-size: 0.65rem; color: #8B1A1A; background: #fff7f2;
+    cursor: pointer; white-space: nowrap; margin-left: 4px; font-family: 'Inter', sans-serif;
+    vertical-align: middle;
+  }
+  .btn-session:hover { background: #fde8d8; border-color: #8B1A1A; }
+
+  /* Conversation modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(45,26,16,.55);
+    display: none; z-index: 200; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: #fff; border-radius: 14px; padding: 0;
+    max-width: 860px; width: 100%; max-height: 85vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  }
+  .modal-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid #f0d9c8;
+    flex-shrink: 0;
+  }
+  .modal-header h3 { font-family: 'Playfair Display', serif; color: #8B1A1A; font-size: 1.05rem; }
+  .modal-header .modal-meta { font-size: 0.72rem; color: #9e7a5a; margin-top: 0.2rem; font-family: monospace; }
+  .modal-close {
+    background: none; border: none; font-size: 1.4rem; cursor: pointer;
+    color: #9e7a5a; line-height: 1; padding: 2px 4px; margin-left: 1rem;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { color: #8B1A1A; }
+  .modal-body { overflow-y: auto; padding: 1rem 1.5rem 1.5rem; flex: 1; }
+  .conv-msg {
+    padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.75rem;
+    border: 1px solid #f0d9c8; background: #fff7f2;
+  }
+  .conv-msg-header { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; }
+  .conv-msg-num { font-size: 0.7rem; font-weight: 600; color: #8B1A1A; }
+  .conv-msg-time { font-size: 0.7rem; color: #9e7a5a; }
+  .conv-msg-chars { font-size: 0.7rem; color: #9e7a5a; }
+  .conv-msg-rag { }
+  .conv-empty { text-align: center; color: #9e7a5a; padding: 2rem; font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -76,6 +153,18 @@
 <div id="error" style="display:none"></div>
 
 <div id="content">
+
+  <!-- Global date range filter -->
+  <div class="date-filter-bar">
+    <label>Event date:</label>
+    <input type="date" id="global-from">
+    <span class="df-sep">to</span>
+    <input type="date" id="global-to">
+    <button class="btn-apply" onclick="applyDateFilter()">Apply</button>
+    <button class="btn-reset" onclick="resetDateFilter()">Reset</button>
+    <span class="date-filter-note">Applies to all charts &amp; message table &nbsp;·&nbsp; KPI cards always reflect last 30 / 7 / 1 day</span>
+  </div>
+
   <div class="kpi-grid">
     <div class="kpi-card"><div class="val" id="kpi-dau">—</div><div class="label">DAU (today)</div></div>
     <div class="kpi-card"><div class="val" id="kpi-wau">—</div><div class="label">WAU (7 days)</div></div>
@@ -85,11 +174,11 @@
     <div class="kpi-card"><div class="val" id="kpi-avg-dur">—</div><div class="label">Avg duration min (7d)</div></div>
   </div>
 
-  <div class="charts-grid">
-    <div class="chart-card" style="grid-column: 1 / -1;"><h2>Daily Active Users — last 30 days</h2><canvas id="dauChart"></canvas></div>
-    <div class="chart-card"><h2>User Type Split (30 days)</h2><canvas id="ratioChart"></canvas></div>
-    <div class="chart-card"><h2>Session Depth — messages per session (30 days)</h2><canvas id="depthChart"></canvas></div>
-    <div class="chart-card" style="grid-column: 1 / -1;"><h2>RAG Usage Rate — last 30 days</h2><canvas id="ragChart"></canvas></div>
+  <div class="charts-grid" id="charts-grid">
+    <div class="chart-card" style="grid-column: 1 / -1;"><h2 id="dau-title">Daily Active Users</h2><canvas id="dauChart"></canvas></div>
+    <div class="chart-card"><h2>User Type Split</h2><canvas id="ratioChart"></canvas></div>
+    <div class="chart-card"><h2 id="depth-title">Session Depth — messages per session</h2><canvas id="depthChart"></canvas></div>
+    <div class="chart-card" style="grid-column: 1 / -1;"><h2 id="rag-title">RAG Usage Rate</h2><canvas id="ragChart"></canvas></div>
     <div class="chart-card" style="grid-column: 1 / -1;"><h2>Top Starter Prompts (30 days)</h2><canvas id="startersChart"></canvas></div>
     <div class="chart-card">
       <h2>OTP Funnel (30 days)</h2>
@@ -100,7 +189,7 @@
       </div>
       <div class="conversion-badge" id="f-pct"></div>
     </div>
-    <div class="chart-card"><h2>Memory Facts Saved per Day (30 days)</h2><canvas id="memChart"></canvas></div>
+    <div class="chart-card"><h2 id="mem-title">Memory Facts Saved per Day</h2><canvas id="memChart"></canvas></div>
   </div>
 
   <!-- Message Audit Table -->
@@ -118,6 +207,10 @@
         <option value="true">RAG used</option>
         <option value="false">No RAG</option>
       </select>
+      <span class="df-sep">Date:</span>
+      <input type="date" id="audit-date-from" title="From date">
+      <span class="df-sep">–</span>
+      <input type="date" id="audit-date-to" title="To date">
       <span class="audit-count" id="audit-count"></span>
     </div>
     <div class="audit-wrap">
@@ -145,6 +238,20 @@
   </div>
 </div>
 
+<!-- Conversation modal -->
+<div class="modal-overlay" id="conv-modal" onclick="closeModal(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3>Conversation Messages</h3>
+        <div class="modal-meta" id="conv-session-id"></div>
+      </div>
+      <button class="modal-close" onclick="closeConvModal()">✕</button>
+    </div>
+    <div class="modal-body" id="conv-body"></div>
+  </div>
+</div>
+
 <script>
 const RED = '#8B1A1A', AMBER = '#c0610a', TEAL = '#2e7d77', GRID = 'rgba(139,26,26,.08)';
 Chart.defaults.font.family = "'Inter', sans-serif";
@@ -152,6 +259,31 @@ Chart.defaults.color = '#9e7a5a';
 
 const token = new URLSearchParams(location.search).get('token') || '';
 
+let _serverData = null;
+let _dateFrom = null;
+let _dateTo = null;
+const _charts = {};
+
+/* ── helpers ── */
+function fmt(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+function shortSession(id) { return id ? '…' + id.slice(-8) : '—'; }
+function makeChart(id, config) {
+  if (_charts[id]) { _charts[id].destroy(); }
+  _charts[id] = new Chart(document.getElementById(id), config);
+}
+function dateLabel(from, to) {
+  if (!from && !to) return 'last 30 days';
+  if (from && to) return `${from} – ${to}`;
+  if (from) return `from ${from}`;
+  return `up to ${to}`;
+}
+
+/* ── data loading ── */
 async function load() {
   try {
     const resp = await fetch('/auth/analytics-data', {
@@ -161,8 +293,21 @@ async function load() {
     });
     if (resp.status === 401) { showError('Invalid token. Add ?token=YOUR_TOKEN to the URL.'); return; }
     if (!resp.ok)            { showError('Server error: ' + resp.status); return; }
-    const d = await resp.json();
-    render(d);
+    _serverData = await resp.json();
+
+    // set default date range to last 30 days
+    const today = new Date();
+    const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+    const toStr = today.toISOString().slice(0, 10);
+    const fromStr = d30.toISOString().slice(0, 10);
+    document.getElementById('global-from').value = fromStr;
+    document.getElementById('global-to').value = toStr;
+    document.getElementById('audit-date-from').value = fromStr;
+    document.getElementById('audit-date-to').value = toStr;
+    _dateFrom = fromStr;
+    _dateTo = toStr;
+
+    render(_serverData);
   } catch (e) {
     showError('Network error: ' + e.message);
   }
@@ -175,11 +320,49 @@ function showError(msg) {
   el.style.display = 'block';
 }
 
+/* ── date filtering ── */
+function filterByDay(arr, fromStr, toStr) {
+  if (!fromStr && !toStr) return arr;
+  return arr.filter(r => {
+    const day = (r.day || '').slice(0, 10);
+    if (fromStr && day < fromStr) return false;
+    if (toStr   && day > toStr)   return false;
+    return true;
+  });
+}
+
+function applyDateFilter() {
+  _dateFrom = document.getElementById('global-from').value || null;
+  _dateTo   = document.getElementById('global-to').value   || null;
+  // sync audit date inputs
+  document.getElementById('audit-date-from').value = _dateFrom || '';
+  document.getElementById('audit-date-to').value   = _dateTo   || '';
+  if (_serverData) {
+    renderCharts(_serverData);
+    applyAuditFilters();
+  }
+}
+
+function resetDateFilter() {
+  const today = new Date();
+  const d30 = new Date(today); d30.setDate(d30.getDate() - 29);
+  const toStr   = today.toISOString().slice(0, 10);
+  const fromStr = d30.toISOString().slice(0, 10);
+  document.getElementById('global-from').value = fromStr;
+  document.getElementById('global-to').value   = toStr;
+  document.getElementById('audit-date-from').value = fromStr;
+  document.getElementById('audit-date-to').value   = toStr;
+  _dateFrom = fromStr;
+  _dateTo   = toStr;
+  if (_serverData) { renderCharts(_serverData); applyAuditFilters(); }
+}
+
+/* ── render ── */
 function render(d) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
-  // KPIs
+  // KPIs (always fixed — from SQL views)
   const kpi = (d.v_kpi_summary || [{}])[0] || {};
   document.getElementById('kpi-dau').textContent     = kpi.dau ?? '—';
   document.getElementById('kpi-wau').textContent     = kpi.wau ?? '—';
@@ -188,48 +371,73 @@ function render(d) {
   document.getElementById('kpi-avg-msg').textContent = kpi.avg_messages_per_session ?? '—';
   document.getElementById('kpi-avg-dur').textContent = kpi.avg_session_minutes ?? '—';
 
-  // DAU trend
-  const dau = [...(d.v_dau || [])].sort((a,b) => a.day > b.day ? 1 : -1);
-  new Chart(document.getElementById('dauChart'), {
-    type: 'line',
-    data: {
-      labels: dau.map(r => r.day?.slice(0,10)),
-      datasets: [
-        { label: 'Total',      data: dau.map(r => r.unique_users),      borderColor: RED,   backgroundColor: 'rgba(139,26,26,.08)', tension: 0.3, fill: true },
-        { label: 'Registered', data: dau.map(r => r.registered_users),  borderColor: AMBER, tension: 0.3, fill: false },
-        { label: 'Guest',      data: dau.map(r => r.guest_users),       borderColor: TEAL,  tension: 0.3, fill: false },
-      ]
-    },
-    options: { plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, grid: { color: GRID } }, x: { grid: { color: GRID } } } }
+  // OTP funnel (pre-aggregated — always 30d)
+  const f = (d.v_otp_funnel || [{}])[0] || {};
+  document.getElementById('f-req').textContent  = f.requested ?? '—';
+  document.getElementById('f-ver').textContent  = f.verified  ?? '—';
+  document.getElementById('f-fail').textContent = f.failed    ?? '—';
+  document.getElementById('f-pct').textContent  = f.conversion_pct != null ? `Conversion: ${f.conversion_pct}%` : '';
+
+  // Top starters (pre-aggregated — always 30d)
+  const starters = (d.v_top_starters || []).slice(0, 10);
+  makeChart('startersChart', {
+    type: 'bar',
+    data: { labels: starters.map(r => r.starter_label), datasets: [{ label: 'Uses', data: starters.map(r => r.uses), backgroundColor: RED, borderRadius: 4 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, grid: { color: GRID } }, y: { grid: { color: GRID } } } }
   });
 
-  // User type doughnut
+  // User type ratio (pre-aggregated — always 30d)
   const ratio = d.v_user_type_ratio || [];
-  new Chart(document.getElementById('ratioChart'), {
+  makeChart('ratioChart', {
     type: 'doughnut',
     data: { labels: ratio.map(r => r.user_type), datasets: [{ data: ratio.map(r => r.session_count), backgroundColor: [RED, AMBER, TEAL] }] },
     options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
   });
 
+  initAudit(d.message_audit || []);
+  renderCharts(d);
+}
+
+function renderCharts(d) {
+  const label = dateLabel(_dateFrom, _dateTo);
+
+  // DAU trend
+  document.getElementById('dau-title').textContent = `Daily Active Users — ${label}`;
+  const dau = filterByDay([...(d.v_dau || [])].sort((a,b) => a.day > b.day ? 1 : -1), _dateFrom, _dateTo);
+  makeChart('dauChart', {
+    type: 'line',
+    data: {
+      labels: dau.map(r => r.day?.slice(0,10)),
+      datasets: [
+        { label: 'Total',      data: dau.map(r => r.unique_users),     borderColor: RED,   backgroundColor: 'rgba(139,26,26,.08)', tension: 0.3, fill: true },
+        { label: 'Registered', data: dau.map(r => r.registered_users), borderColor: AMBER, tension: 0.3, fill: false },
+        { label: 'Guest',      data: dau.map(r => r.guest_users),      borderColor: TEAL,  tension: 0.3, fill: false },
+      ]
+    },
+    options: { plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, grid: { color: GRID } }, x: { grid: { color: GRID } } } }
+  });
+
   // Session depth histogram
+  document.getElementById('depth-title').textContent = `Session Depth — messages per session (${label})`;
   const buckets = { '1': 0, '2-5': 0, '6-10': 0, '11-20': 0, '20+': 0 };
-  (d.v_session_stats || []).forEach(r => {
+  filterByDay(d.v_session_stats || [], _dateFrom, _dateTo).forEach(r => {
     const mc = r.message_count || 0;
-    if (mc === 1) buckets['1']++;
+    if (mc === 1)      buckets['1']++;
     else if (mc <= 5)  buckets['2-5']++;
     else if (mc <= 10) buckets['6-10']++;
     else if (mc <= 20) buckets['11-20']++;
     else               buckets['20+']++;
   });
-  new Chart(document.getElementById('depthChart'), {
+  makeChart('depthChart', {
     type: 'bar',
     data: { labels: Object.keys(buckets), datasets: [{ label: 'Sessions', data: Object.values(buckets), backgroundColor: RED, borderRadius: 6 }] },
     options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: GRID } }, x: { grid: { color: GRID } } } }
   });
 
   // RAG usage
-  const rag = [...(d.v_rag_usage || [])].sort((a,b) => a.day > b.day ? 1 : -1);
-  new Chart(document.getElementById('ragChart'), {
+  document.getElementById('rag-title').textContent = `RAG Usage Rate — ${label}`;
+  const rag = filterByDay([...(d.v_rag_usage || [])].sort((a,b) => a.day > b.day ? 1 : -1), _dateFrom, _dateTo);
+  makeChart('ragChart', {
     type: 'bar',
     data: {
       labels: rag.map(r => r.day?.slice(0,10)),
@@ -248,30 +456,13 @@ function render(d) {
     }
   });
 
-  // Top starters
-  const starters = (d.v_top_starters || []).slice(0, 10);
-  new Chart(document.getElementById('startersChart'), {
-    type: 'bar',
-    data: { labels: starters.map(r => r.starter_label), datasets: [{ label: 'Uses', data: starters.map(r => r.uses), backgroundColor: RED, borderRadius: 4 }] },
-    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, grid: { color: GRID } }, y: { grid: { color: GRID } } } }
-  });
-
-  // OTP funnel
-  const f = (d.v_otp_funnel || [{}])[0] || {};
-  document.getElementById('f-req').textContent  = f.requested ?? '—';
-  document.getElementById('f-ver').textContent  = f.verified  ?? '—';
-  document.getElementById('f-fail').textContent = f.failed    ?? '—';
-  document.getElementById('f-pct').textContent  = f.conversion_pct != null ? `Conversion: ${f.conversion_pct}%` : '';
-
-  // Message audit
-  initAudit(d.message_audit || []);
-
   // Memory extractions
-  const mem = d.v_memory_extractions || [];
+  document.getElementById('mem-title').textContent = `Memory Facts Saved per Day (${label})`;
+  const mem = filterByDay(d.v_memory_extractions || [], _dateFrom, _dateTo);
   const memDays = [...new Set(mem.map(r => r.day?.slice(0,10)))].sort();
-  const memPeriodic    = memDays.map(d => mem.filter(r => r.day?.slice(0,10) === d && r.trigger === 'periodic').reduce((s,r) => s + (r.total_facts_saved||0), 0));
-  const memSessionEnd  = memDays.map(d => mem.filter(r => r.day?.slice(0,10) === d && r.trigger === 'session_end').reduce((s,r) => s + (r.total_facts_saved||0), 0));
-  new Chart(document.getElementById('memChart'), {
+  const memPeriodic   = memDays.map(dy => mem.filter(r => r.day?.slice(0,10) === dy && r.trigger === 'periodic').reduce((s,r) => s + (r.total_facts_saved||0), 0));
+  const memSessionEnd = memDays.map(dy => mem.filter(r => r.day?.slice(0,10) === dy && r.trigger === 'session_end').reduce((s,r) => s + (r.total_facts_saved||0), 0));
+  makeChart('memChart', {
     type: 'bar',
     data: {
       labels: memDays,
@@ -292,17 +483,6 @@ let _auditFiltered = [];
 let _auditPage = 0;
 const PAGE_SIZE = 50;
 
-function fmt(ts) {
-  if (!ts) return '—';
-  const d = new Date(ts);
-  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) +
-    ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-}
-
-function shortSession(id) {
-  return id ? '…' + id.slice(-8) : '—';
-}
-
 function renderAuditPage() {
   const tbody = document.getElementById('audit-body');
   const start = _auditPage * PAGE_SIZE;
@@ -311,11 +491,15 @@ function renderAuditPage() {
   tbody.innerHTML = rows.map(r => {
     const p  = r.properties || {};
     const rag = p.rag_used === true || p.rag_used === 'true';
+    const sid = r.session_id || '';
     return `<tr>
       <td>${fmt(r.created_at)}</td>
       <td>${r.user_email || '<em style="color:#bbb">guest</em>'}</td>
       <td><span class="badge ${r.user_type === 'registered' ? 'badge-reg' : 'badge-guest'}">${r.user_type || '—'}</span></td>
-      <td class="mono" title="${r.session_id || ''}">${shortSession(r.session_id)}</td>
+      <td class="mono" title="${sid}">
+        ${shortSession(sid)}
+        ${sid ? `<button class="btn-session" onclick="openConvModal('${sid}')">View</button>` : ''}
+      </td>
       <td style="text-align:center">${p.message_index != null ? p.message_index + 1 : '—'}</td>
       <td style="text-align:right">${p.char_count ?? '—'}</td>
       <td><span class="badge ${rag ? 'badge-yes' : 'badge-no'}">${rag ? 'Yes' : 'No'}</span></td>
@@ -332,9 +516,11 @@ function renderAuditPage() {
 }
 
 function applyAuditFilters() {
-  const q    = document.getElementById('audit-search').value.trim().toLowerCase();
-  const type = document.getElementById('audit-type').value;
-  const rag  = document.getElementById('audit-rag').value;
+  const q        = document.getElementById('audit-search').value.trim().toLowerCase();
+  const type     = document.getElementById('audit-type').value;
+  const rag      = document.getElementById('audit-rag').value;
+  const dateFrom = document.getElementById('audit-date-from').value || null;
+  const dateTo   = document.getElementById('audit-date-to').value   || null;
 
   _auditFiltered = _auditAll.filter(r => {
     const p = r.properties || {};
@@ -343,6 +529,11 @@ function applyAuditFilters() {
     if (type && r.user_type !== type) return false;
     if (rag === 'true'  && !(p.rag_used === true || p.rag_used === 'true'))  return false;
     if (rag === 'false' &&  (p.rag_used === true || p.rag_used === 'true'))  return false;
+    if (dateFrom || dateTo) {
+      const day = (r.created_at || '').slice(0, 10);
+      if (dateFrom && day < dateFrom) return false;
+      if (dateTo   && day > dateTo)   return false;
+    }
     return true;
   });
   _auditPage = 0;
@@ -351,14 +542,59 @@ function applyAuditFilters() {
 
 function initAudit(rows) {
   _auditAll = rows;
-  _auditFiltered = rows;
-  renderAuditPage();
+  applyAuditFilters();
 
-  ['audit-search', 'audit-type', 'audit-rag'].forEach(id => {
+  ['audit-search', 'audit-type', 'audit-rag', 'audit-date-from', 'audit-date-to'].forEach(id => {
     document.getElementById(id).addEventListener('input', applyAuditFilters);
   });
   document.getElementById('audit-prev').addEventListener('click', () => { _auditPage--; renderAuditPage(); });
   document.getElementById('audit-next').addEventListener('click', () => { _auditPage++; renderAuditPage(); });
+}
+
+/* ── Conversation Modal ── */
+function openConvModal(sessionId) {
+  if (!_auditAll.length) return;
+  const msgs = _auditAll
+    .filter(r => r.session_id === sessionId)
+    .sort((a, b) => {
+      const ai = (a.properties?.message_index ?? 0);
+      const bi = (b.properties?.message_index ?? 0);
+      return ai - bi;
+    });
+
+  document.getElementById('conv-session-id').textContent = sessionId;
+
+  const body = document.getElementById('conv-body');
+  if (!msgs.length) {
+    body.innerHTML = '<div class="conv-empty">No messages found for this session.</div>';
+  } else {
+    body.innerHTML = msgs.map(r => {
+      const p = r.properties || {};
+      const rag = p.rag_used === true || p.rag_used === 'true';
+      const msgNum = p.message_index != null ? p.message_index + 1 : '?';
+      return `<div class="conv-msg">
+        <div class="conv-msg-header">
+          <span class="conv-msg-num">Msg #${msgNum}</span>
+          <span class="conv-msg-time">${fmt(r.created_at)}</span>
+          <span class="conv-msg-chars">${p.char_count != null ? p.char_count + ' chars' : ''}</span>
+          <span class="conv-msg-rag"><span class="badge ${rag ? 'badge-yes' : 'badge-no'}">${rag ? 'RAG' : 'No RAG'}</span>${rag && p.rag_doc_count ? ` &nbsp;<span style="font-size:.65rem;color:#9e7a5a">${p.rag_doc_count} docs</span>` : ''}</span>
+        </div>
+        <div style="font-size:0.72rem;color:#9e7a5a">
+          ${r.user_email || '<em>guest</em>'} &nbsp;·&nbsp; <span class="badge ${r.user_type === 'registered' ? 'badge-reg' : 'badge-guest'}">${r.user_type || '—'}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('conv-modal').classList.add('open');
+}
+
+function closeConvModal() {
+  document.getElementById('conv-modal').classList.remove('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('conv-modal')) closeConvModal();
 }
 </script>
 </body>
