@@ -360,20 +360,7 @@
   /* ── Social Share (image card) ── */
   const _shareCss = document.createElement('style');
   _shareCss.textContent = `
-    .dadi-share-btn {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 10px; border-radius: 999px;
-      border: 1px solid rgba(139,26,26,0.28);
-      background: rgba(253,246,240,0.97); color: #8B1A1A;
-      font-size: 0.69rem; cursor: pointer;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.18s, background 0.15s;
-      margin-top: 4px;
-      white-space: nowrap;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.08);
-      font-family: 'Inter', sans-serif;
-    }
-    .dadi-share-btn:hover { background: rgba(139,26,26,0.08); }
+    .dadi-share-btn { cursor: pointer; flex-shrink: 0; }
     .dadi-share-modal {
       position: fixed; inset: 0; z-index: 999999;
       display: flex; align-items: center; justify-content: center;
@@ -666,35 +653,67 @@
     });
   }
 
-  /* ── Inject share button on AI messages ── */
-  const _decoratedMsgs = new WeakSet();
+  /* ── Inject share button into Chainlit action bar ── */
+  const _decoratedBars = new WeakSet();
+
+  // Chainlit action buttons (copy/thumbs) have Tailwind size class "h-9"
+  // We find them, grab their container, clone the button style, and append ours.
+  const _iconBtnSel = 'button[class*="h-9"]:not(.dadi-share-btn), button[class*="size-"]:not(.dadi-share-btn)';
+
+  function findActionBar(article) {
+    const parent = article.parentElement;
+    if (!parent) return null;
+
+    // Check siblings of article in the same parent
+    for (const child of parent.children) {
+      if (child === article) continue;
+      const btn = child.querySelector(_iconBtnSel) || (child.matches(_iconBtnSel) ? child : null);
+      if (btn) return btn.parentElement && btn.parentElement !== document.body ? btn.parentElement : child;
+    }
+
+    // Check grandparent — look in branches that don't contain the article
+    const gp = parent.parentElement;
+    if (gp) {
+      for (const child of gp.children) {
+        if (child.contains(article)) continue;
+        const btn = child.querySelector(_iconBtnSel) || (child.matches(_iconBtnSel) ? child : null);
+        if (btn) return btn.parentElement && btn.parentElement !== document.body ? btn.parentElement : child;
+      }
+    }
+
+    return null;
+  }
 
   function injectShareButtons() {
     if (isLoginPage()) return;
     document.querySelectorAll('[role="article"]').forEach(article => {
-      if (_decoratedMsgs.has(article)) return;
       if ((article.innerText || article.textContent || '').trim().length < 40) return;
-      _decoratedMsgs.add(article);
 
+      const bar = findActionBar(article);
+      if (!bar || _decoratedBars.has(bar)) return;
+      if (bar.querySelector('.dadi-share-btn')) { _decoratedBars.add(bar); return; }
+
+      _decoratedBars.add(bar);
+
+      // Clone className from an existing action button so we blend in perfectly
+      const existingBtn = bar.querySelector('button:not(.dadi-share-btn)');
       const btn = document.createElement('button');
-      btn.className = 'dadi-share-btn';
+      btn.className = (existingBtn ? existingBtn.className + ' ' : '') + 'dadi-share-btn';
       btn.title = 'Share as image';
+      // Match SVG class/size from existing icon if present
+      const existingSvgClass = existingBtn?.querySelector('svg')?.getAttribute('class') || '';
       btn.innerHTML =
-        '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${existingSvgClass}" style="width:1em;height:1em">` +
           '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
           '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
-        '</svg> Share';
+        '</svg>';
 
       btn.onclick = e => {
         e.stopPropagation();
         showShareModal((article.innerText || article.textContent || '').trim());
       };
 
-      // Insert after article; show/hide via parent hover
-      article.insertAdjacentElement('afterend', btn);
-      const parent = article.parentElement || article;
-      parent.addEventListener('mouseenter', () => { btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; });
-      parent.addEventListener('mouseleave', () => { btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; });
+      bar.appendChild(btn);
     });
   }
 
