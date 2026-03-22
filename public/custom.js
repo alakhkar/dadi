@@ -357,4 +357,170 @@
   }
   new MutationObserver(hideReadmeButton).observe(document.body, { childList: true, subtree: true });
 
+  /* ── Social Share ── */
+  const _shareCss = document.createElement('style');
+  _shareCss.textContent = `
+    .dadi-msg-wrapper { position: relative !important; }
+    .dadi-share-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 999px;
+      border: 1px solid rgba(139,26,26,0.25);
+      background: rgba(253,246,240,0.95); color: #8B1A1A;
+      font-size: 0.7rem; cursor: pointer;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s, background 0.15s;
+      position: absolute; bottom: -14px; right: 6px; z-index: 50;
+      white-space: nowrap;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.09);
+      font-family: 'Inter', sans-serif;
+    }
+    .dadi-msg-wrapper:hover .dadi-share-btn {
+      opacity: 1; pointer-events: auto;
+    }
+    .dadi-share-btn:hover { background: rgba(139,26,26,0.09); }
+    .dadi-share-modal {
+      position: fixed; inset: 0; z-index: 999999;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.38);
+      animation: dadiModalIn 0.15s ease;
+    }
+    @keyframes dadiModalIn { from { opacity:0; transform:scale(0.97); } to { opacity:1; transform:scale(1); } }
+    .dadi-share-box {
+      background: #FDF6F0; border-radius: 18px; padding: 22px 20px 16px;
+      max-width: 340px; width: 92%;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+      font-family: 'Inter', sans-serif;
+    }
+    .dadi-share-title {
+      font-size: 0.95rem; font-weight: 700; color: #8B1A1A;
+      margin: 0 0 10px; letter-spacing: -0.01em;
+    }
+    .dadi-share-preview {
+      background: #fff; border-radius: 9px; padding: 9px 11px;
+      font-size: 0.76rem; color: #555; line-height: 1.55;
+      max-height: 76px; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      margin-bottom: 14px; border: 1px solid rgba(139,26,26,0.13);
+    }
+    .dadi-share-opts { display: flex; gap: 9px; margin-bottom: 12px; }
+    .dadi-share-opt {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 5px; padding: 11px 6px; border-radius: 12px;
+      border: 1.5px solid rgba(139,26,26,0.18); background: #fff;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+      font-size: 0.7rem; color: #444; font-weight: 600;
+    }
+    .dadi-share-opt:hover { border-color: #8B1A1A; background: rgba(139,26,26,0.04); }
+    .dadi-share-opt svg { width: 26px; height: 26px; }
+    .dadi-share-status { font-size: 0.7rem; color: #2e7d32; text-align: center; min-height: 1rem; margin-bottom: 6px; }
+    .dadi-share-cancel {
+      width: 100%; padding: 7px; border: none; border-radius: 8px;
+      background: none; color: #aaa; font-size: 0.76rem; cursor: pointer;
+    }
+    .dadi-share-cancel:hover { color: #8B1A1A; }
+  `;
+  document.head.appendChild(_shareCss);
+
+  function _buildShareText(rawText) {
+    return '\u2728 Dadi AI says:\n\n\u201c' + rawText.trim() + '\u201d\n\n\uD83D\uDCAC Chat with Dadi at dadi.ai';
+  }
+
+  function showShareModal(rawText) {
+    const shareText = _buildShareText(rawText);
+    const modal = document.createElement('div');
+    modal.className = 'dadi-share-modal';
+    modal.innerHTML =
+      '<div class="dadi-share-box">' +
+        '<p class="dadi-share-title">Share this message</p>' +
+        '<div class="dadi-share-preview" id="dadi-sp"></div>' +
+        '<div class="dadi-share-opts">' +
+          '<button class="dadi-share-opt" id="dadi-sw">' +
+            '<svg viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.558 4.122 1.532 5.856L.057 23.57l5.865-1.54A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.032-1.39l-.36-.214-3.481.914.929-3.395-.235-.37A9.818 9.818 0 012.182 12C2.182 6.567 6.567 2.182 12 2.182S21.818 6.567 21.818 12 17.433 21.818 12 21.818z"/></svg>' +
+            'WhatsApp' +
+          '</button>' +
+          '<button class="dadi-share-opt" id="dadi-si">' +
+            '<svg viewBox="0 0 24 24"><defs><linearGradient id="igG" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f09433"/><stop offset="25%" stop-color="#e6683c"/><stop offset="50%" stop-color="#dc2743"/><stop offset="75%" stop-color="#cc2366"/><stop offset="100%" stop-color="#bc1888"/></linearGradient></defs><path fill="url(#igG)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>' +
+            'Instagram' +
+          '</button>' +
+        '</div>' +
+        '<div class="dadi-share-status" id="dadi-ss"></div>' +
+        '<button class="dadi-share-cancel" id="dadi-sc">Cancel</button>' +
+      '</div>';
+
+    // Set preview text safely
+    modal.querySelector('#dadi-sp').textContent = rawText.trim();
+    document.body.appendChild(modal);
+
+    modal.querySelector('#dadi-sw').onclick = () => {
+      window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank');
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'whatsapp' });
+      modal.remove();
+    };
+
+    modal.querySelector('#dadi-si').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(shareText);
+      } catch (_) {
+        const ta = document.createElement('textarea');
+        ta.value = shareText; ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'instagram' });
+      modal.querySelector('#dadi-ss').textContent = '\u2713 Copied! Open Instagram \u2192 New Post \u2192 Paste';
+      setTimeout(() => { if (modal.parentNode) modal.remove(); }, 2600);
+    };
+
+    modal.querySelector('#dadi-sc').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  /* Detect and decorate AI message elements with a share button */
+  const _decoratedMsgs = new WeakSet();
+
+  function injectShareButtons() {
+    if (isLoginPage()) return;
+
+    // Chainlit renders AI steps — try broad selectors then filter to content-heavy elements
+    document.querySelectorAll([
+      '[class*="message"]:not([class*="input"])',
+      '[class*="step"]',
+      '[data-testid*="message"]',
+      '[data-testid*="step"]',
+    ].join(',')).forEach(el => {
+      if (_decoratedMsgs.has(el)) return;
+
+      // Must contain formatted content (AI responses use markdown → <p>, <ul>, <code>, etc.)
+      if (!el.querySelector('p, ul, ol, pre, code, h1, h2, h3')) return;
+
+      // Skip user message bubbles (Chainlit typically marks role or uses "human" class)
+      if (el.dataset.role === 'user' ||
+          el.classList.toString().toLowerCase().includes('user') ||
+          el.classList.toString().toLowerCase().includes('human')) return;
+
+      // Skip very short content (e.g. single-word echoes)
+      if ((el.innerText || el.textContent).trim().length < 40) return;
+
+      _decoratedMsgs.add(el);
+      el.classList.add('dadi-msg-wrapper');
+
+      const btn = document.createElement('button');
+      btn.className = 'dadi-share-btn';
+      btn.title = 'Share this message';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+          '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+        '</svg> Share';
+
+      btn.onclick = e => {
+        e.stopPropagation();
+        showShareModal((el.innerText || el.textContent).trim());
+      };
+
+      el.appendChild(btn);
+    });
+  }
+
+  new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
+
 })();
