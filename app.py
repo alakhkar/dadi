@@ -285,7 +285,7 @@ try:
         _asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
 
-    @_cl_app.get("/admin/analytics")
+    @_cl_app.get("/auth/admin")
     async def admin_analytics_dashboard(request: Request):
         provided = (
             request.query_params.get("token") or
@@ -316,7 +316,7 @@ try:
         return HTMLResponse(content=build_dashboard_html(data))
 
     print("[Auth] OTP endpoint registered ✓")
-    print("[Analytics] Admin dashboard registered at /admin/analytics ✓")
+    print("[Analytics] Admin dashboard registered at /auth/admin ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
