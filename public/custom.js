@@ -480,24 +480,11 @@
   function injectShareButtons() {
     if (isLoginPage()) return;
 
-    // Chainlit renders AI steps — try broad selectors then filter to content-heavy elements
-    document.querySelectorAll([
-      '[class*="message"]:not([class*="input"])',
-      '[class*="step"]',
-      '[data-testid*="message"]',
-      '[data-testid*="step"]',
-    ].join(',')).forEach(el => {
+    // Chainlit renders AI message content in [role="article"] divs
+    document.querySelectorAll('[role="article"]').forEach(el => {
       if (_decoratedMsgs.has(el)) return;
 
-      // Must contain formatted content (AI responses use markdown → <p>, <ul>, <code>, etc.)
-      if (!el.querySelector('p, ul, ol, pre, code, h1, h2, h3')) return;
-
-      // Skip user message bubbles (Chainlit typically marks role or uses "human" class)
-      if (el.dataset.role === 'user' ||
-          el.classList.toString().toLowerCase().includes('user') ||
-          el.classList.toString().toLowerCase().includes('human')) return;
-
-      // Skip very short content (e.g. single-word echoes)
+      // Skip very short content (e.g. still streaming / single words)
       if ((el.innerText || el.textContent).trim().length < 40) return;
 
       _decoratedMsgs.add(el);
