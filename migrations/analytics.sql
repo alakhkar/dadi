@@ -157,7 +157,7 @@ SELECT
 FROM analytics_events
 WHERE event_name = 'memory_extracted'
   AND created_at >= now() - interval '30 days'
-GROUP BY 1, 3
+GROUP BY 1, 4
 ORDER BY 1 DESC;
 
 -- Session stats (raw rows for histogram, last 30 days)
