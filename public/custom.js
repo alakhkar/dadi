@@ -357,4 +357,347 @@
   }
   new MutationObserver(hideReadmeButton).observe(document.body, { childList: true, subtree: true });
 
+  /* ── Social Share (image card) ── */
+  const _shareCss = document.createElement('style');
+  _shareCss.textContent = `
+    .dadi-share-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 999px;
+      border: 1px solid rgba(139,26,26,0.28);
+      background: rgba(253,246,240,0.97); color: #8B1A1A;
+      font-size: 0.69rem; cursor: pointer;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s, background 0.15s;
+      margin-top: 4px;
+      white-space: nowrap;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.08);
+      font-family: 'Inter', sans-serif;
+    }
+    .dadi-share-btn:hover { background: rgba(139,26,26,0.08); }
+    .dadi-share-modal {
+      position: fixed; inset: 0; z-index: 999999;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.42); padding: 1rem;
+      animation: dsModalIn 0.15s ease;
+    }
+    @keyframes dsModalIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+    .dadi-share-box {
+      background: #fff; border-radius: 18px; padding: 20px;
+      max-width: 420px; width: 100%;
+      box-shadow: 0 12px 50px rgba(0,0,0,0.22);
+      font-family: 'Inter', sans-serif;
+    }
+    .dadi-share-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .dadi-share-title { font-size: 0.95rem; font-weight: 700; color: #8B1A1A; }
+    .dadi-share-x {
+      background: none; border: none; font-size: 1.2rem; color: #aaa;
+      cursor: pointer; line-height: 1; padding: 2px 4px;
+    }
+    .dadi-share-x:hover { color: #8B1A1A; }
+    .dadi-share-img-wrap {
+      border-radius: 10px; overflow: hidden; margin-bottom: 14px;
+      border: 1px solid #f0d9c8; line-height: 0;
+    }
+    .dadi-share-img-wrap img { width: 100%; display: block; }
+    .dadi-share-generating {
+      height: 120px; display: flex; align-items: center; justify-content: center;
+      color: #9e7a5a; font-size: 0.8rem; background: #FDF6F0; border-radius: 10px;
+      margin-bottom: 14px;
+    }
+    .dadi-share-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;
+    }
+    .dadi-share-grid-wide { grid-column: 1 / -1; }
+    .dadi-share-opt {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 8px; border-radius: 10px;
+      border: 1px solid #f0d9c8; background: #fff;
+      font-size: 0.78rem; font-weight: 500; color: #2d1a10;
+      cursor: pointer; transition: all 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .dadi-share-opt:hover { border-color: #8B1A1A; background: #FEF0E7; }
+    .dadi-share-opt.primary { background: #8B1A1A; color: #fff; border-color: #8B1A1A; }
+    .dadi-share-opt.primary:hover { background: #6e1414; }
+    .dadi-share-status {
+      font-size: 0.72rem; color: #2e7d32; text-align: center;
+      min-height: 1.2em; margin-top: 4px;
+    }
+  `;
+  document.head.appendChild(_shareCss);
+
+  /* ── Canvas image generation ── */
+  function _cleanText(raw) {
+    return raw
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+      .replace(/`+/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function _wrapLines(ctx, text, maxWidth) {
+    const paragraphs = text.split('\n');
+    const lines = [];
+    for (const para of paragraphs) {
+      if (!para.trim()) { lines.push(''); continue; }
+      const words = para.split(' ').filter(Boolean);
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+
+  function _generateCard(text) {
+    const W = 1080, H = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#FDF6F0';
+    ctx.fillRect(0, 0, W, H);
+
+    // Inner border
+    const BRD = 36;
+    ctx.strokeStyle = '#eacfba';
+    ctx.lineWidth = 3;
+    _rrect(ctx, BRD, BRD, W - BRD * 2, H - BRD * 2, 20);
+    ctx.stroke();
+
+    // Decorative quote mark (top-left)
+    ctx.fillStyle = 'rgba(139,26,26,0.13)';
+    ctx.font = '260px Georgia, serif';
+    ctx.fillText('\u201C', 68, 300);
+
+    // Message text
+    const PAD = 90, TEXT_X = PAD, TEXT_MAX = W - PAD * 2;
+    const FONT_SIZE = 48, LINE_H = 72;
+    ctx.fillStyle = '#2d1a10';
+    ctx.font = `${FONT_SIZE}px Georgia, 'Times New Roman', serif`;
+
+    const allLines = _wrapLines(ctx, text, TEXT_MAX);
+    const MAX_LINES = 9;
+    let displayLines = allLines.slice(0, MAX_LINES);
+    if (allLines.length > MAX_LINES) {
+      displayLines[MAX_LINES - 1] = displayLines[MAX_LINES - 1].replace(/\s+\S*$/, '') + '\u2026';
+    }
+
+    const TEXT_Y_START = 320;
+    displayLines.forEach((line, i) => {
+      if (line === '') return;
+      ctx.fillText(line, TEXT_X, TEXT_Y_START + i * LINE_H);
+    });
+
+    // Divider above branding
+    const DIV_Y = H - 170;
+    ctx.strokeStyle = '#eacfba';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, DIV_Y); ctx.lineTo(W - PAD, DIV_Y);
+    ctx.stroke();
+
+    // Branding row
+    const BRAND_Y = H - 100;
+
+    // "Dadi AI" in serif red
+    ctx.fillStyle = '#8B1A1A';
+    ctx.font = 'bold 52px Georgia, serif';
+    ctx.fillText('Dadi AI', PAD, BRAND_Y);
+
+    // Dot separator
+    const aiTextW = ctx.measureText('Dadi AI').width;
+    ctx.fillStyle = '#c0a080';
+    ctx.font = '40px Georgia, serif';
+    ctx.fillText('\u00B7', PAD + aiTextW + 18, BRAND_Y - 4);
+    const dotW = ctx.measureText('\u00B7').width;
+
+    // URL
+    ctx.fillStyle = '#9e7a5a';
+    ctx.font = '40px Inter, Arial, sans-serif';
+    ctx.fillText('www.mydadi.in', PAD + aiTextW + 18 + dotW + 16, BRAND_Y - 2);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function _rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  /* ── Share modal ── */
+  function showShareModal(rawText) {
+    document.getElementById('dadi-share-modal')?.remove();
+
+    const text = _cleanText(rawText);
+    const url = 'https://www.mydadi.in';
+    const waText = `\u2728 "${text.slice(0, 300)}${text.length > 300 ? '\u2026' : ''}"\n\n\uD83D\uDCAC Chat with Dadi \u2192 ${url}`;
+    const twText = `"${text.slice(0, 220)}${text.length > 220 ? '\u2026' : ''}"\n\n\u2014 Dadi AI`;
+
+    const modal = document.createElement('div');
+    modal.className = 'dadi-share-modal';
+    modal.id = 'dadi-share-modal';
+    modal.innerHTML = `
+      <div class="dadi-share-box">
+        <div class="dadi-share-header">
+          <span class="dadi-share-title">Share this response</span>
+          <button class="dadi-share-x" id="ds-close">\u2715</button>
+        </div>
+        <div class="dadi-share-generating" id="ds-generating">Generating image\u2026</div>
+        <div class="dadi-share-img-wrap" id="ds-img-wrap" style="display:none"></div>
+        <div class="dadi-share-grid" id="ds-btns" style="display:none">
+          ${navigator.canShare ? '<button class="dadi-share-opt primary dadi-share-grid-wide" id="ds-native">\u2b06\ufe0f Share Image\u2026</button>' : ''}
+          <button class="dadi-share-opt" id="ds-download">\u2b07\ufe0f Download</button>
+          <button class="dadi-share-opt" id="ds-copyimg">\ud83d\udccb Copy Image</button>
+          <button class="dadi-share-opt" id="ds-wa">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.558 4.122 1.532 5.856L.057 23.57l5.865-1.54A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.032-1.39l-.36-.214-3.481.914.929-3.395-.235-.37A9.818 9.818 0 012.182 12C2.182 6.567 6.567 2.182 12 2.182S21.818 6.567 21.818 12 17.433 21.818 12 21.818z"/></svg>
+            WhatsApp
+          </button>
+          <button class="dadi-share-opt" id="ds-tw">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#000"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>
+            Twitter / X
+          </button>
+          <button class="dadi-share-opt" id="ds-link">\uD83D\uDD17 Copy Link</button>
+        </div>
+        <div class="dadi-share-status" id="ds-status"></div>
+      </div>`;
+
+    document.body.appendChild(modal);
+
+    const setStatus = (msg, color) => {
+      const el = modal.querySelector('#ds-status');
+      el.textContent = msg;
+      el.style.color = color || '#2e7d32';
+    };
+
+    modal.querySelector('#ds-close').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    // Generate image off main thread via setTimeout
+    let _imgDataUrl = null;
+    setTimeout(() => {
+      try {
+        _imgDataUrl = _generateCard(text);
+        const img = document.createElement('img');
+        img.src = _imgDataUrl;
+        img.alt = 'Share card';
+        modal.querySelector('#ds-generating').style.display = 'none';
+        const wrap = modal.querySelector('#ds-img-wrap');
+        wrap.appendChild(img);
+        wrap.style.display = 'block';
+        modal.querySelector('#ds-btns').style.display = 'grid';
+      } catch (err) {
+        modal.querySelector('#ds-generating').textContent = 'Could not generate image.';
+      }
+    }, 30);
+
+    // Native share (mobile — shares the image file)
+    modal.querySelector('#ds-native')?.addEventListener('click', async () => {
+      if (!_imgDataUrl) return;
+      try {
+        const blob = await (await fetch(_imgDataUrl)).blob();
+        const file = new File([blob], 'dadi-ai.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Dadi AI', text: waText });
+        } else {
+          await navigator.share({ title: 'Dadi AI', text: waText, url });
+        }
+      } catch (_) {}
+    });
+
+    // Download
+    modal.querySelector('#ds-download')?.addEventListener('click', () => {
+      if (!_imgDataUrl) return;
+      const a = document.createElement('a');
+      a.href = _imgDataUrl; a.download = 'dadi-ai.png'; a.click();
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'download' });
+    });
+
+    // Copy image to clipboard
+    modal.querySelector('#ds-copyimg')?.addEventListener('click', async () => {
+      if (!_imgDataUrl) return;
+      try {
+        const blob = await (await fetch(_imgDataUrl)).blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setStatus('\u2713 Image copied to clipboard!');
+        if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'copy_image' });
+      } catch (_) {
+        setStatus('Could not copy image \u2014 try Download instead.', '#c0392b');
+      }
+    });
+
+    // WhatsApp
+    modal.querySelector('#ds-wa')?.addEventListener('click', () => {
+      window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'whatsapp' });
+    });
+
+    // Twitter / X
+    modal.querySelector('#ds-tw')?.addEventListener('click', () => {
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(twText)}&url=${encodeURIComponent(url)}`, '_blank');
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'twitter' });
+    });
+
+    // Copy link
+    modal.querySelector('#ds-link')?.addEventListener('click', async e => {
+      try { await navigator.clipboard.writeText(url); } catch (_) {}
+      setStatus('\u2713 Link copied!');
+      e.target.textContent = '\u2713 Copied!';
+      setTimeout(() => { if (e.target) e.target.textContent = '\uD83D\uDD17 Copy Link'; }, 2000);
+    });
+  }
+
+  /* ── Inject share button on AI messages ── */
+  const _decoratedMsgs = new WeakSet();
+
+  function injectShareButtons() {
+    if (isLoginPage()) return;
+    document.querySelectorAll('[role="article"]').forEach(article => {
+      if (_decoratedMsgs.has(article)) return;
+      if ((article.innerText || article.textContent || '').trim().length < 40) return;
+      _decoratedMsgs.add(article);
+
+      const btn = document.createElement('button');
+      btn.className = 'dadi-share-btn';
+      btn.title = 'Share as image';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+          '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+        '</svg> Share';
+
+      btn.onclick = e => {
+        e.stopPropagation();
+        showShareModal((article.innerText || article.textContent || '').trim());
+      };
+
+      // Insert after article; show/hide via parent hover
+      article.insertAdjacentElement('afterend', btn);
+      const parent = article.parentElement || article;
+      parent.addEventListener('mouseenter', () => { btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; });
+      parent.addEventListener('mouseleave', () => { btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; });
+    });
+  }
+
+  new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
+
 })();
