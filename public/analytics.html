@@ -27,6 +27,45 @@
   .funnel-card .fval { font-size: 1.6rem; font-weight: 600; color: #8B1A1A; }
   .funnel-card .flabel { font-size: 0.7rem; color: #9e7a5a; text-transform: uppercase; }
   .conversion-badge { text-align: center; font-size: 0.85rem; color: #2e7d32; font-weight: 500; margin-top: 0.5rem; }
+
+  /* Audit table */
+  .audit-section { margin-top: 2.5rem; }
+  .audit-section h2 { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: #8B1A1A; margin-bottom: 1rem; }
+  .audit-toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .audit-toolbar input, .audit-toolbar select {
+    padding: 6px 10px; border: 1px solid #f0d9c8; border-radius: 8px;
+    font-size: 0.8rem; background: #fff; color: #2d1a10; outline: none;
+    font-family: 'Inter', sans-serif;
+  }
+  .audit-toolbar input { width: 220px; }
+  .audit-count { font-size: 0.75rem; color: #9e7a5a; margin-left: auto; }
+  .audit-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #f0d9c8; box-shadow: 0 1px 4px rgba(139,26,26,.06); }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.78rem; }
+  thead th {
+    padding: 10px 12px; text-align: left; background: #fff7f2;
+    color: #8B1A1A; font-weight: 600; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: .05em;
+    border-bottom: 1px solid #f0d9c8; white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #fdf0e6; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fffaf7; }
+  tbody td { padding: 8px 12px; color: #2d1a10; vertical-align: top; }
+  td.mono { font-family: monospace; font-size: 0.72rem; color: #7a5a3a; }
+  .badge {
+    display: inline-block; padding: 2px 7px; border-radius: 999px;
+    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+  }
+  .badge-reg  { background: #fde8d8; color: #8B1A1A; }
+  .badge-guest{ background: #e8f4e8; color: #2e7d32; }
+  .badge-yes  { background: #e8f0fe; color: #1a56bb; }
+  .badge-no   { background: #f5f5f5; color: #888; }
+  .audit-pagination { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; justify-content: flex-end; font-size: 0.78rem; color: #9e7a5a; }
+  .audit-pagination button {
+    padding: 4px 10px; border: 1px solid #f0d9c8; border-radius: 6px;
+    background: #fff; color: #8B1A1A; cursor: pointer; font-size: 0.78rem;
+  }
+  .audit-pagination button:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
@@ -62,6 +101,47 @@
       <div class="conversion-badge" id="f-pct"></div>
     </div>
     <div class="chart-card"><h2>Memory Facts Saved per Day (30 days)</h2><canvas id="memChart"></canvas></div>
+  </div>
+
+  <!-- Message Audit Table -->
+  <div class="audit-section">
+    <h2>Message Audit History</h2>
+    <div class="audit-toolbar">
+      <input type="text" id="audit-search" placeholder="Filter by email or session…">
+      <select id="audit-type">
+        <option value="">All users</option>
+        <option value="registered">Registered</option>
+        <option value="guest">Guest</option>
+      </select>
+      <select id="audit-rag">
+        <option value="">All messages</option>
+        <option value="true">RAG used</option>
+        <option value="false">No RAG</option>
+      </select>
+      <span class="audit-count" id="audit-count"></span>
+    </div>
+    <div class="audit-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Type</th>
+            <th>Session</th>
+            <th>Msg #</th>
+            <th>Chars</th>
+            <th>RAG</th>
+            <th>Docs</th>
+          </tr>
+        </thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+    <div class="audit-pagination">
+      <button id="audit-prev">← Prev</button>
+      <span id="audit-page-label"></span>
+      <button id="audit-next">Next →</button>
+    </div>
   </div>
 </div>
 
@@ -183,6 +263,9 @@ function render(d) {
   document.getElementById('f-fail').textContent = f.failed    ?? '—';
   document.getElementById('f-pct').textContent  = f.conversion_pct != null ? `Conversion: ${f.conversion_pct}%` : '';
 
+  // Message audit
+  initAudit(d.message_audit || []);
+
   // Memory extractions
   const mem = d.v_memory_extractions || [];
   const memDays = [...new Set(mem.map(r => r.day?.slice(0,10)))].sort();
@@ -202,6 +285,81 @@ function render(d) {
 }
 
 load();
+
+/* ── Audit Table ── */
+let _auditAll = [];
+let _auditFiltered = [];
+let _auditPage = 0;
+const PAGE_SIZE = 50;
+
+function fmt(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+
+function shortSession(id) {
+  return id ? '…' + id.slice(-8) : '—';
+}
+
+function renderAuditPage() {
+  const tbody = document.getElementById('audit-body');
+  const start = _auditPage * PAGE_SIZE;
+  const rows  = _auditFiltered.slice(start, start + PAGE_SIZE);
+
+  tbody.innerHTML = rows.map(r => {
+    const p  = r.properties || {};
+    const rag = p.rag_used === true || p.rag_used === 'true';
+    return `<tr>
+      <td>${fmt(r.created_at)}</td>
+      <td>${r.user_email || '<em style="color:#bbb">guest</em>'}</td>
+      <td><span class="badge ${r.user_type === 'registered' ? 'badge-reg' : 'badge-guest'}">${r.user_type || '—'}</span></td>
+      <td class="mono" title="${r.session_id || ''}">${shortSession(r.session_id)}</td>
+      <td style="text-align:center">${p.message_index != null ? p.message_index + 1 : '—'}</td>
+      <td style="text-align:right">${p.char_count ?? '—'}</td>
+      <td><span class="badge ${rag ? 'badge-yes' : 'badge-no'}">${rag ? 'Yes' : 'No'}</span></td>
+      <td style="text-align:center">${p.rag_doc_count ?? '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const total = _auditFiltered.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  document.getElementById('audit-page-label').textContent = `Page ${_auditPage + 1} of ${pages}`;
+  document.getElementById('audit-prev').disabled = _auditPage === 0;
+  document.getElementById('audit-next').disabled = _auditPage >= pages - 1;
+  document.getElementById('audit-count').textContent = `${total} messages`;
+}
+
+function applyAuditFilters() {
+  const q    = document.getElementById('audit-search').value.trim().toLowerCase();
+  const type = document.getElementById('audit-type').value;
+  const rag  = document.getElementById('audit-rag').value;
+
+  _auditFiltered = _auditAll.filter(r => {
+    const p = r.properties || {};
+    if (q && !((r.user_email || '').toLowerCase().includes(q)) &&
+             !((r.session_id || '').toLowerCase().includes(q))) return false;
+    if (type && r.user_type !== type) return false;
+    if (rag === 'true'  && !(p.rag_used === true || p.rag_used === 'true'))  return false;
+    if (rag === 'false' &&  (p.rag_used === true || p.rag_used === 'true'))  return false;
+    return true;
+  });
+  _auditPage = 0;
+  renderAuditPage();
+}
+
+function initAudit(rows) {
+  _auditAll = rows;
+  _auditFiltered = rows;
+  renderAuditPage();
+
+  ['audit-search', 'audit-type', 'audit-rag'].forEach(id => {
+    document.getElementById(id).addEventListener('input', applyAuditFilters);
+  });
+  document.getElementById('audit-prev').addEventListener('click', () => { _auditPage--; renderAuditPage(); });
+  document.getElementById('audit-next').addEventListener('click', () => { _auditPage++; renderAuditPage(); });
+}
 </script>
 </body>
 </html>

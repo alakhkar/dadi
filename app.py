@@ -299,19 +299,28 @@ try:
             "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
         ]
         async with httpx.AsyncClient(timeout=15.0) as client:
-            responses = await _asyncio.gather(*[
-                client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
-                for v in views
-            ], return_exceptions=True)
+            view_responses, audit_response = await _asyncio.gather(
+                _asyncio.gather(*[
+                    client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
+                    for v in views
+                ], return_exceptions=True),
+                client.get(
+                    f"{SUPABASE_URL}/rest/v1/analytics_events"
+                    "?event_name=eq.message_sent&order=created_at.desc&limit=500",
+                    headers=SUPA_HEADERS,
+                ),
+            )
 
         data = {}
-        for view, resp in zip(views, responses):
+        for view, resp in zip(views, view_responses):
             if isinstance(resp, Exception):
                 data[view] = []
             elif resp.status_code == 200:
                 data[view] = resp.json()
             else:
                 data[view] = []
+
+        data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
 
         return JSONResponse(data)
 
