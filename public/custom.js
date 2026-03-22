@@ -360,7 +360,6 @@
   /* ── Social Share ── */
   const _shareCss = document.createElement('style');
   _shareCss.textContent = `
-    .dadi-msg-wrapper { position: relative !important; }
     .dadi-share-btn {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 3px 9px; border-radius: 999px;
@@ -369,13 +368,10 @@
       font-size: 0.7rem; cursor: pointer;
       opacity: 0; pointer-events: none;
       transition: opacity 0.18s, background 0.15s;
-      position: absolute; bottom: -14px; right: 6px; z-index: 50;
+      margin-top: 6px;
       white-space: nowrap;
       box-shadow: 0 1px 5px rgba(0,0,0,0.09);
       font-family: 'Inter', sans-serif;
-    }
-    .dadi-msg-wrapper:hover .dadi-share-btn {
-      opacity: 1; pointer-events: auto;
     }
     .dadi-share-btn:hover { background: rgba(139,26,26,0.09); }
     .dadi-share-modal {
@@ -488,7 +484,6 @@
       if ((el.innerText || el.textContent).trim().length < 40) return;
 
       _decoratedMsgs.add(el);
-      el.classList.add('dadi-msg-wrapper');
 
       const btn = document.createElement('button');
       btn.className = 'dadi-share-btn';
@@ -504,7 +499,17 @@
         showShareModal((el.innerText || el.textContent).trim());
       };
 
-      el.appendChild(btn);
+      // Insert button AFTER the article (sibling), not inside it
+      el.insertAdjacentElement('afterend', btn);
+
+      // Show/hide on hover of the nearest parent container
+      const hoverTarget = el.parentElement || el;
+      hoverTarget.addEventListener('mouseenter', () => {
+        btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+      });
+      hoverTarget.addEventListener('mouseleave', () => {
+        btn.style.opacity = '0'; btn.style.pointerEvents = 'none';
+      });
     });
   }
 
