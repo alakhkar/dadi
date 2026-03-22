@@ -265,8 +265,7 @@ try:
     import asyncio as _asyncio
     from chainlit.server import app as _cl_app
     from fastapi import Request
-    from fastapi.responses import JSONResponse, HTMLResponse
-    from dashboard import build_dashboard_html
+    from fastapi.responses import JSONResponse
 
     @_cl_app.post("/auth/request-otp")
     async def auth_request_otp(request: Request):
@@ -285,12 +284,13 @@ try:
         _asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
 
-    @_cl_app.get("/auth/admin")
-    async def admin_analytics_dashboard(request: Request):
-        provided = (
-            request.query_params.get("token") or
-            request.headers.get("Authorization", "").replace("Bearer ", "")
-        )
+    @_cl_app.post("/auth/analytics-data")
+    async def analytics_data(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid request"}, status_code=400)
+        provided = body.get("token", "")
         if not ANALYTICS_ADMIN_TOKEN or provided != ANALYTICS_ADMIN_TOKEN:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
@@ -313,10 +313,10 @@ try:
             else:
                 data[view] = []
 
-        return HTMLResponse(content=build_dashboard_html(data))
+        return JSONResponse(data)
 
     print("[Auth] OTP endpoint registered ✓")
-    print("[Analytics] Admin dashboard registered at /auth/admin ✓")
+    print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
