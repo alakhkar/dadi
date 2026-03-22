@@ -656,28 +656,28 @@
   /* ── Inject share button into Chainlit action bar ── */
   const _decoratedBars = new WeakSet();
 
-  // Chainlit action buttons (copy/thumbs) have Tailwind class "h-9 w-9"
-  // Use class selector (.h-9) for exact word match, not substring.
-  const _iconBtnSel = 'button.h-9:not(.dadi-share-btn)';
+  // Walk up from a button to the outer action bar (has class "-ml-1.5")
+  function getOuterActionBar(btn) {
+    let el = btn.parentElement;
+    while (el && el !== document.body) {
+      if (el.classList && el.classList.contains('-ml-1.5')) return el;
+      el = el.parentElement;
+    }
+    return btn.parentElement; // fallback
+  }
 
-  function findActionBar(article) {
-    // Walk up the ancestor chain; at each level check SIBLINGS of the current node
-    // (not global descendants) to avoid matching buttons elsewhere in the page.
-    let current = article;
-    for (let depth = 0; depth < 10; depth++) {
+  // From the action bar, find the associated article by walking up and checking siblings
+  function findArticleForBar(bar) {
+    let current = bar;
+    for (let i = 0; i < 10; i++) {
       const parent = current.parentElement;
       if (!parent || parent === document.body) break;
-
       for (const sibling of parent.children) {
         if (sibling === current || sibling.contains(current)) continue;
-        const btns = Array.from(sibling.querySelectorAll(_iconBtnSel));
-        if (btns.length > 0) {
-          // btns[0] is the copy button (first in DOM order); its parent is the action bar
-          const bar = btns[0].parentElement;
-          return (bar && bar !== document.body) ? bar : sibling;
-        }
+        if (sibling.getAttribute('role') === 'article') return sibling;
+        const nested = sibling.querySelector('[role="article"]');
+        if (nested) return nested;
       }
-
       current = parent;
     }
     return null;
@@ -685,37 +685,37 @@
 
   function injectShareButtons() {
     if (isLoginPage()) return;
-    document.querySelectorAll('[role="article"]').forEach(article => {
-      if ((article.innerText || article.textContent || '').trim().length < 40) return;
 
-      const bar = findActionBar(article);
+    // Find every .h-9 action button, resolve its outer bar, inject once per bar
+    document.querySelectorAll('button.h-9:not(.dadi-share-btn)').forEach(btn => {
+      const bar = getOuterActionBar(btn);
       if (!bar || _decoratedBars.has(bar)) return;
       if (bar.querySelector('.dadi-share-btn')) { _decoratedBars.add(bar); return; }
 
+      const article = findArticleForBar(bar);
+      if (!article || (article.innerText || article.textContent || '').trim().length < 40) return;
+
       _decoratedBars.add(bar);
 
-      // Clone className from an existing action button so we blend in perfectly
-      const existingBtn = bar.querySelector('button:not(.dadi-share-btn)');
-      const btn = document.createElement('button');
-      btn.className = (existingBtn ? existingBtn.className + ' ' : '') + 'dadi-share-btn';
-      btn.title = 'Share as image';
-      // Match SVG class/size from existing icon if present
-      const existingSvgClass = existingBtn?.querySelector('svg')?.getAttribute('class') || '';
-      btn.innerHTML =
-        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${existingSvgClass}" style="width:1em;height:1em">` +
+      const existingBtn = bar.querySelector('button.h-9:not(.dadi-share-btn)');
+      const svgCls = existingBtn?.querySelector('svg')?.getAttribute('class') || 'lucide h-4 w-4';
+      const shareBtn = document.createElement('button');
+      shareBtn.className = (existingBtn ? existingBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ') + 'dadi-share-btn';
+      shareBtn.title = 'Share as image';
+      shareBtn.innerHTML =
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${svgCls}">` +
           '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
           '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
         '</svg>';
-
-      btn.onclick = e => {
+      shareBtn.onclick = e => {
         e.stopPropagation();
         showShareModal((article.innerText || article.textContent || '').trim());
       };
-
-      bar.appendChild(btn);
+      bar.appendChild(shareBtn);
     });
   }
 
   new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
+  injectShareButtons();
 
 })();
