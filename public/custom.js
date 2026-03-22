@@ -656,31 +656,24 @@
   /* ── Inject share button into Chainlit action bar ── */
   const _decoratedBars = new WeakSet();
 
-  // Chainlit action buttons (copy/thumbs) have Tailwind size class "h-9"
-  // We find them, grab their container, clone the button style, and append ours.
-  const _iconBtnSel = 'button[class*="h-9"]:not(.dadi-share-btn), button[class*="size-"]:not(.dadi-share-btn)';
+  // Chainlit action buttons (copy/thumbs) have Tailwind class "h-9 w-9"
+  // Use class selector (.h-9) for exact word match, not substring.
+  const _iconBtnSel = 'button.h-9:not(.dadi-share-btn)';
 
   function findActionBar(article) {
-    const parent = article.parentElement;
-    if (!parent) return null;
-
-    // Check siblings of article in the same parent
-    for (const child of parent.children) {
-      if (child === article) continue;
-      const btn = child.querySelector(_iconBtnSel) || (child.matches(_iconBtnSel) ? child : null);
-      if (btn) return btn.parentElement && btn.parentElement !== document.body ? btn.parentElement : child;
-    }
-
-    // Check grandparent — look in branches that don't contain the article
-    const gp = parent.parentElement;
-    if (gp) {
-      for (const child of gp.children) {
-        if (child.contains(article)) continue;
-        const btn = child.querySelector(_iconBtnSel) || (child.matches(_iconBtnSel) ? child : null);
-        if (btn) return btn.parentElement && btn.parentElement !== document.body ? btn.parentElement : child;
+    // Walk UP from the article; at each level search DOWN for h-9 buttons
+    // that are NOT inside the article itself. First match = action bar container.
+    let el = article.parentElement;
+    for (let depth = 0; depth < 10 && el && el !== document.body; depth++) {
+      const btns = Array.from(el.querySelectorAll(_iconBtnSel))
+        .filter(b => !article.contains(b));
+      if (btns.length > 0) {
+        // Return the direct parent of the first button (the flex row container)
+        const bar = btns[0].parentElement;
+        return (bar && bar !== document.body) ? bar : el;
       }
+      el = el.parentElement;
     }
-
     return null;
   }
 
