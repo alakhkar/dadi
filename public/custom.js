@@ -1,6 +1,7 @@
 /* ══════════════════════════════════════════════
-   DADI AI — custom.js
+   DADI AI — custom.js v3
    ══════════════════════════════════════════════ */
+console.error('[dadi-share] custom.js v3 loaded');
 (function () {
 
   /* ── Google Analytics ── */
