@@ -449,7 +449,7 @@
     return lines;
   }
 
-  function _generateCard(text) {
+  async function _generateCard(text) {
     const W = 1080, H = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -465,6 +465,19 @@
     ctx.lineWidth = 3;
     _rrect(ctx, BRD, BRD, W - BRD * 2, H - BRD * 2, 20);
     ctx.stroke();
+
+    // Logo at top center
+    await new Promise(resolve => {
+      const logo = new Image();
+      logo.onload = () => {
+        const LOGO_H = 80;
+        const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
+        ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
+        resolve();
+      };
+      logo.onerror = resolve; // skip gracefully if image fails to load
+      logo.src = '/logo_light.png';
+    });
 
     // Decorative quote mark (top-left)
     ctx.fillStyle = 'rgba(139,26,26,0.13)';
@@ -581,9 +594,9 @@
 
     // Generate image off main thread via setTimeout
     let _imgDataUrl = null;
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        _imgDataUrl = _generateCard(text);
+        _imgDataUrl = await _generateCard(text);
         const img = document.createElement('img');
         img.src = _imgDataUrl;
         img.alt = 'Share card';
