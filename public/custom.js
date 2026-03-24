@@ -467,17 +467,22 @@
     ctx.stroke();
 
     // Logo at top center
-    await new Promise(resolve => {
-      const logo = new Image();
-      logo.onload = () => {
-        const LOGO_H = 80;
-        const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
-        ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
-        resolve();
-      };
-      logo.onerror = resolve; // skip gracefully if image fails to load
-      logo.src = '/public/logo_light.png';
-    });
+    await fetch('/public/logo_light.png')
+      .then(r => r.blob())
+      .then(blob => new Promise(resolve => {
+        const url = URL.createObjectURL(blob);
+        const logo = new Image();
+        logo.onload = () => {
+          const LOGO_H = 80;
+          const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
+          ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        logo.onerror = resolve;
+        logo.src = url;
+      }))
+      .catch(() => {});
 
     // Decorative quote mark (top-left)
     ctx.fillStyle = 'rgba(139,26,26,0.13)';
