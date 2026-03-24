@@ -476,7 +476,7 @@
         resolve();
       };
       logo.onerror = resolve; // skip gracefully if image fails to load
-      logo.src = '/logo_light.png';
+      logo.src = '/public/logo_light.png';
     });
 
     // Decorative quote mark (top-left)
