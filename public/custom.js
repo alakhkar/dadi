@@ -468,12 +468,12 @@
 
     // Logo at top center
     await fetch('/public/logo_light.png')
-      .then(r => { console.log('[dadi-share] logo fetch status:', r.status, r.url); return r.blob(); })
+      .then(r => { console.error('[dadi-share] logo fetch status:', r.status, r.url); return r.blob(); })
       .then(blob => new Promise(resolve => {
         const url = URL.createObjectURL(blob);
         const logo = new Image();
         logo.onload = () => {
-          console.log('[dadi-share] logo loaded, naturalWidth:', logo.naturalWidth, 'naturalHeight:', logo.naturalHeight);
+          console.error('[dadi-share] logo loaded, naturalWidth:', logo.naturalWidth, 'naturalHeight:', logo.naturalHeight);
           const LOGO_H = 80;
           const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
           ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
