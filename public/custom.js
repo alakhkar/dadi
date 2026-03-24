@@ -450,6 +450,7 @@
   }
 
   async function _generateCard(text) {
+    console.error('[dadi-share] _generateCard called');
     const W = 1080, H = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
