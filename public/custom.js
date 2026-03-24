@@ -1,7 +1,6 @@
 /* ══════════════════════════════════════════════
-   DADI AI — custom.js v3
+   DADI AI — custom.js
    ══════════════════════════════════════════════ */
-console.error('[dadi-share] custom.js v3 loaded');
 (function () {
 
   /* ── Google Analytics ── */
@@ -451,7 +450,6 @@ console.error('[dadi-share] custom.js v3 loaded');
   }
 
   async function _generateCard(text) {
-    console.error('[dadi-share] _generateCard called');
     const W = 1080, H = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
@@ -470,22 +468,21 @@ console.error('[dadi-share] custom.js v3 loaded');
 
     // Logo at top center
     await fetch('/public/logo_light.png')
-      .then(r => { console.error('[dadi-share] logo fetch status:', r.status, r.url); return r.blob(); })
+      .then(r => r.blob())
       .then(blob => new Promise(resolve => {
         const url = URL.createObjectURL(blob);
         const logo = new Image();
         logo.onload = () => {
-          console.error('[dadi-share] logo loaded, naturalWidth:', logo.naturalWidth, 'naturalHeight:', logo.naturalHeight);
           const LOGO_H = 80;
           const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
           ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
           URL.revokeObjectURL(url);
           resolve();
         };
-        logo.onerror = (e) => { console.error('[dadi-share] logo image error', e); resolve(); };
+        logo.onerror = resolve;
         logo.src = url;
       }))
-      .catch(e => console.error('[dadi-share] logo fetch failed:', e));
+      .catch(() => {});
 
     // Decorative quote mark (top-left)
     ctx.fillStyle = 'rgba(139,26,26,0.13)';
