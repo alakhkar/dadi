@@ -473,7 +473,7 @@
         const url = URL.createObjectURL(blob);
         const logo = new Image();
         logo.onload = () => {
-          const LOGO_H = 80;
+          const LOGO_H = 160;
           const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
           ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
           URL.revokeObjectURL(url);
