@@ -553,10 +553,7 @@
   function showShareModal(rawText) {
     document.getElementById('dadi-share-modal')?.remove();
 
-    const text = _cleanText(rawText);
     const url = 'https://www.mydadi.in';
-    const waText = `\u2728 "${text.slice(0, 300)}${text.length > 300 ? '\u2026' : ''}"\n\n\uD83D\uDCAC Chat with Dadi \u2192 ${url}`;
-    const twText = `"${text.slice(0, 220)}${text.length > 220 ? '\u2026' : ''}"\n\n\u2014 Dadi AI`;
 
     const modal = document.createElement('div');
     modal.className = 'dadi-share-modal';
@@ -622,9 +619,9 @@
         const blob = await (await fetch(_imgDataUrl)).blob();
         const file = new File([blob], 'dadi-ai.png', { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Dadi AI', text: waText });
+          await navigator.share({ files: [file], title: 'Dadi AI', url });
         } else {
-          await navigator.share({ title: 'Dadi AI', text: waText, url });
+          await navigator.share({ title: 'Dadi AI', url });
         }
       } catch (_) {}
     });
@@ -652,13 +649,13 @@
 
     // WhatsApp
     modal.querySelector('#ds-wa')?.addEventListener('click', () => {
-      window.open('https://wa.me/?text=' + encodeURIComponent(waText), '_blank');
+      window.open('https://wa.me/?text=' + encodeURIComponent(url), '_blank');
       if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'whatsapp' });
     });
 
     // Twitter / X
     modal.querySelector('#ds-tw')?.addEventListener('click', () => {
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(twText)}&url=${encodeURIComponent(url)}`, '_blank');
+      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}`, '_blank');
       if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'twitter' });
     });
 
