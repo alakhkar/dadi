@@ -553,6 +553,7 @@
   function showShareModal(rawText) {
     document.getElementById('dadi-share-modal')?.remove();
 
+    const text = _cleanText(rawText);
     const url = 'https://www.mydadi.in';
 
     const modal = document.createElement('div');
