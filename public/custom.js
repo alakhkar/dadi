@@ -508,6 +508,12 @@
       ctx.fillText(line, TEXT_X, TEXT_Y_START + i * LINE_H);
     });
 
+    // Decorative closing quote mark (bottom-right)
+    ctx.fillStyle = 'rgba(139,26,26,0.13)';
+    ctx.font = '260px Georgia, serif';
+    const closeQuoteW = ctx.measureText('\u201D').width;
+    ctx.fillText('\u201D', W - 68 - closeQuoteW, H - 190);
+
     // Divider above branding
     const DIV_Y = H - 170;
     ctx.strokeStyle = '#eacfba';
