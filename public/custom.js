@@ -456,7 +456,7 @@
     const ctx = canvas.getContext('2d');
 
     // Background
-    ctx.fillStyle = '#FDF6F0';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
 
     // Inner border
