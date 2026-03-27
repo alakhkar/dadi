@@ -469,62 +469,50 @@
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    // ── Left panel (orange) ──
-    ctx.fillStyle = '#FF4D00';
+    // ── Left panel (white) ──
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, LW, H);
 
-    // Decorative circles
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.beginPath(); ctx.arc(LW - 60, H - 60, 140, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath(); ctx.arc(LW - 20, H - 20, 90, 0, Math.PI * 2); ctx.stroke();
+    // Load and draw dadi.png centered in left panel
+    await fetch('/public/dadi.png')
+      .then(r => r.blob())
+      .then(blob => new Promise(resolve => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          const maxW = LW - 40, maxH = H - 80;
+          const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+          const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+          ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 20, dw, dh);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = url;
+      }))
+      .catch(() => {});
 
-    // "AI-POWERED" label
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '11px "Space Mono", monospace';
-    ctx.letterSpacing = '3px';
-    ctx.fillText('AI-POWERED', 36, 58);
-
-    // Avatar circle
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.beginPath(); ctx.arc(76, 258, 40, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(76, 258, 40, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = '800 26px "Syne", sans-serif';
-    ctx.letterSpacing = '0px';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('PD', 76, 258);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-
-    // Name
-    ctx.fillStyle = '#fff';
-    ctx.font = '800 34px "Syne", sans-serif';
-    ctx.letterSpacing = '-0.5px';
-    ctx.fillText('Pushpa', 36, 338);
-    ctx.fillText('Dadi', 36, 378);
-
-    // Location
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = '300 13px "DM Sans", sans-serif';
-    ctx.letterSpacing = '0.3px';
-    ctx.fillText('Jaipur, Rajasthan', 36, 402);
-
-    // Bottom brand
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    // Bottom brand on left
+    ctx.fillStyle = '#FF4D00';
     ctx.font = '400 10px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
-    ctx.fillText('MYDADI.IN', 36, H - 44);
+    ctx.textAlign = 'center';
+    ctx.fillText('MYDADI.IN', LW / 2, H - 24);
+    ctx.textAlign = 'left';
+    ctx.letterSpacing = '0px';
 
-    // ── Right panel (black) ──
-    ctx.fillStyle = '#0A0A0A';
+    // ── Right panel (light grey) ──
+    ctx.fillStyle = '#F5F5F5';
     ctx.fillRect(LW, 0, W - LW, H);
 
     const RX = LW + PAD;
+    const TEXT_MAX_W = W - LW - PAD * 2;
+    const FY = H - 52;
+    const TEXT_Y_START = 185;
+    const availableH = FY - TEXT_Y_START - 16;
 
     // Subtle large decorative quote (top-right)
-    ctx.fillStyle = 'rgba(255,77,0,0.06)';
+    ctx.fillStyle = 'rgba(255,77,0,0.07)';
     ctx.font = '800 200px "Syne", sans-serif';
     ctx.letterSpacing = '0px';
     ctx.textAlign = 'right';
@@ -533,38 +521,42 @@
 
     // Orange opening quote
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '800 64px "Syne", sans-serif';
-    ctx.fillText('\u201C', RX, 145);
+    ctx.font = '800 56px "Syne", sans-serif';
+    ctx.fillText('\u201C', RX, 140);
 
-    // Quote text (wrapped, max 7 lines)
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.font = 'italic 300 25px "DM Sans", sans-serif';
-    ctx.letterSpacing = '0.1px';
-    const lines = _wrapText(ctx, text, W - LW - PAD * 2);
-    const MAX_L = 7, LINE_H = 42;
-    let disp = lines.slice(0, MAX_L);
-    if (lines.length > MAX_L) disp[MAX_L - 1] = disp[MAX_L - 1].replace(/\s+\S*$/, '') + '\u2026';
-    disp.forEach((l, i) => ctx.fillText(l, RX, 192 + i * LINE_H));
+    // Adaptive font size: start at 38px, step down by 2 until text fits
+    let fontSize = 38;
+    let lines, lineH;
+    while (fontSize >= 16) {
+      ctx.font = `italic 400 ${fontSize}px "DM Sans", sans-serif`;
+      ctx.letterSpacing = '0.1px';
+      lineH = Math.round(fontSize * 1.55);
+      lines = _wrapText(ctx, text, TEXT_MAX_W);
+      if (lines.length * lineH <= availableH) break;
+      fontSize -= 2;
+    }
+    // Hard truncate if still overflows
+    const maxLines = Math.floor(availableH / lineH);
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      lines[maxLines - 1] = lines[maxLines - 1].replace(/\s+\S*$/, '') + '\u2026';
+    }
+    ctx.fillStyle = '#1a1a1a';
+    lines.forEach((l, i) => ctx.fillText(l, RX, TEXT_Y_START + i * lineH));
 
     // Footer: tag pill + brand
-    const FY = H - 52;
-
-    // Pill background
-    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillStyle = 'rgba(0,0,0,0.07)';
     _rrect(ctx, RX, FY - 18, 118, 28, 14);
     ctx.fill();
 
-    // Dot
     ctx.fillStyle = '#FF4D00';
     ctx.beginPath(); ctx.arc(RX + 16, FY - 4, 3, 0, Math.PI * 2); ctx.fill();
 
-    // "WISDOM"
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.font = '400 9px "Space Mono", monospace';
     ctx.letterSpacing = '2px';
     ctx.fillText('WISDOM', RX + 26, FY);
 
-    // "MYDADI.IN" right-aligned
     ctx.fillStyle = '#FF4D00';
     ctx.font = '400 11px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
