@@ -438,65 +438,142 @@
     document.head.appendChild(l);
   })();
 
-  /* ── Lazy-load html-to-image from CDN ── */
-  let _h2iLib = null;
-  function _loadH2I() {
-    if (_h2iLib) return Promise.resolve(_h2iLib);
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js';
-      s.onload = () => { _h2iLib = window.htmlToImage; resolve(_h2iLib); };
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
+  function _wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
   }
 
-  function _escHtml(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function _rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
   }
 
   async function _generateCard(text) {
-    const lib = await _loadH2I();
     await document.fonts.ready;
 
-    const CARD_W = 1200, CARD_H = 628;
-    const el = document.createElement('div');
-    el.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${CARD_W}px;height:${CARD_H}px;display:flex;overflow:hidden;`;
-    el.innerHTML = `
-      <div style="width:380px;flex-shrink:0;background:#FF4D00;display:flex;flex-direction:column;justify-content:space-between;padding:44px 36px;position:relative;overflow:hidden;">
-        <div style="position:absolute;width:280px;height:280px;border-radius:50%;border:1px solid rgba(255,255,255,0.12);bottom:-80px;right:-80px;"></div>
-        <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);bottom:-20px;right:-20px;"></div>
-        <div style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.5);">AI-powered</div>
-        <div>
-          <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
-            <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:#fff;line-height:1;">PD</span>
-          </div>
-          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:32px;color:#fff;line-height:1.1;letter-spacing:-0.5px;">
-            <span style="display:block;">Pushpa</span><span style="display:block;">Dadi</span>
-          </div>
-          <div style="font-family:'DM Sans',sans-serif;font-weight:300;font-size:13px;color:rgba(255,255,255,0.6);margin-top:8px;letter-spacing:0.3px;">Jaipur, Rajasthan</div>
-        </div>
-        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.35);text-transform:uppercase;">mydadi.in</div>
-      </div>
-      <div style="flex:1;background:#0A0A0A;display:flex;flex-direction:column;justify-content:center;padding:48px 56px;position:relative;overflow:hidden;">
-        <div style="position:absolute;top:20px;right:40px;font-family:'Syne',sans-serif;font-weight:800;font-size:200px;color:rgba(255,77,0,0.06);line-height:1;user-select:none;">\u201C</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:72px;color:#FF4D00;line-height:0.6;margin-bottom:24px;position:relative;z-index:1;">\u201C</div>
-        <p style="font-family:'DM Sans',sans-serif;font-weight:300;font-style:italic;font-size:26px;line-height:1.6;color:rgba(255,255,255,0.92);margin:0;position:relative;z-index:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;">${_escHtml(text)}</p>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:36px;position:relative;z-index:1;">
-          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.08);border-radius:100px;padding:6px 16px;">
-            <div style="width:6px;height:6px;border-radius:50%;background:#FF4D00;flex-shrink:0;"></div>
-            <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.4);text-transform:uppercase;">wisdom</span>
-          </div>
-          <div style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:#FF4D00;text-transform:uppercase;">MYDADI.IN</div>
-        </div>
-      </div>`;
+    const W = 1200, H = 628, LW = 380, PAD = 56;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
 
-    document.body.appendChild(el);
-    try {
-      return await lib.toPng(el, { width: CARD_W, height: CARD_H, pixelRatio: 1 });
-    } finally {
-      el.remove();
-    }
+    // ── Left panel (orange) ──
+    ctx.fillStyle = '#FF4D00';
+    ctx.fillRect(0, 0, LW, H);
+
+    // Decorative circles
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath(); ctx.arc(LW - 60, H - 60, 140, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath(); ctx.arc(LW - 20, H - 20, 90, 0, Math.PI * 2); ctx.stroke();
+
+    // "AI-POWERED" label
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '11px "Space Mono", monospace';
+    ctx.letterSpacing = '3px';
+    ctx.fillText('AI-POWERED', 36, 58);
+
+    // Avatar circle
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath(); ctx.arc(76, 258, 40, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(76, 258, 40, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 26px "Syne", sans-serif';
+    ctx.letterSpacing = '0px';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('PD', 76, 258);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+    // Name
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 34px "Syne", sans-serif';
+    ctx.letterSpacing = '-0.5px';
+    ctx.fillText('Pushpa', 36, 338);
+    ctx.fillText('Dadi', 36, 378);
+
+    // Location
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '300 13px "DM Sans", sans-serif';
+    ctx.letterSpacing = '0.3px';
+    ctx.fillText('Jaipur, Rajasthan', 36, 402);
+
+    // Bottom brand
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '400 10px "Space Mono", monospace';
+    ctx.letterSpacing = '3px';
+    ctx.fillText('MYDADI.IN', 36, H - 44);
+
+    // ── Right panel (black) ──
+    ctx.fillStyle = '#0A0A0A';
+    ctx.fillRect(LW, 0, W - LW, H);
+
+    const RX = LW + PAD;
+
+    // Subtle large decorative quote (top-right)
+    ctx.fillStyle = 'rgba(255,77,0,0.06)';
+    ctx.font = '800 200px "Syne", sans-serif';
+    ctx.letterSpacing = '0px';
+    ctx.textAlign = 'right';
+    ctx.fillText('\u201C', W - 40, 215);
+    ctx.textAlign = 'left';
+
+    // Orange opening quote
+    ctx.fillStyle = '#FF4D00';
+    ctx.font = '800 64px "Syne", sans-serif';
+    ctx.fillText('\u201C', RX, 145);
+
+    // Quote text (wrapped, max 7 lines)
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.font = 'italic 300 25px "DM Sans", sans-serif';
+    ctx.letterSpacing = '0.1px';
+    const lines = _wrapText(ctx, text, W - LW - PAD * 2);
+    const MAX_L = 7, LINE_H = 42;
+    let disp = lines.slice(0, MAX_L);
+    if (lines.length > MAX_L) disp[MAX_L - 1] = disp[MAX_L - 1].replace(/\s+\S*$/, '') + '\u2026';
+    disp.forEach((l, i) => ctx.fillText(l, RX, 192 + i * LINE_H));
+
+    // Footer: tag pill + brand
+    const FY = H - 52;
+
+    // Pill background
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    _rrect(ctx, RX, FY - 18, 118, 28, 14);
+    ctx.fill();
+
+    // Dot
+    ctx.fillStyle = '#FF4D00';
+    ctx.beginPath(); ctx.arc(RX + 16, FY - 4, 3, 0, Math.PI * 2); ctx.fill();
+
+    // "WISDOM"
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '400 9px "Space Mono", monospace';
+    ctx.letterSpacing = '2px';
+    ctx.fillText('WISDOM', RX + 26, FY);
+
+    // "MYDADI.IN" right-aligned
+    ctx.fillStyle = '#FF4D00';
+    ctx.font = '400 11px "Space Mono", monospace';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'right';
+    ctx.fillText('MYDADI.IN', W - PAD, FY);
+    ctx.textAlign = 'left';
+    ctx.letterSpacing = '0px';
+
+    return canvas.toDataURL('image/png');
   }
 
   /* ── Share modal ── */
