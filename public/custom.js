@@ -451,20 +451,11 @@
     return lines;
   }
 
-  function _rrect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
-  }
-
-  async function _generateCard(text) {
+async function _generateCard(text) {
     await document.fonts.ready;
 
-    const W = 1200, H = 628, LW = 380, PAD = 56;
+    // 4:5 aspect ratio (1080x1350 — Instagram portrait standard)
+    const W = 1080, H = 1350, LW = 360, PAD = 56;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
@@ -480,10 +471,10 @@
         const url = URL.createObjectURL(blob);
         const img = new Image();
         img.onload = () => {
-          const maxW = LW - 40, maxH = H - 80;
+          const maxW = LW - 40, maxH = H - 100;
           const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
           const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-          ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 20, dw, dh);
+          ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 30, dw, dh);
           URL.revokeObjectURL(url);
           resolve();
         };
@@ -497,7 +488,7 @@
     ctx.font = '400 30px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'center';
-    ctx.fillText('MYDADI.IN', LW / 2, H - 24);
+    ctx.fillText('MYDADI.IN', LW / 2, H - 40);
     ctx.textAlign = 'left';
     ctx.letterSpacing = '0px';
 
@@ -507,22 +498,22 @@
 
     const RX = LW + PAD;
     const TEXT_MAX_W = W - LW - PAD * 2;
-    const FY = H - 52;
-    const TEXT_Y_START = 185;
-    const availableH = FY - TEXT_Y_START - 16;
+    const FY = H - 70;
+    const TEXT_Y_START = 360;
+    const availableH = FY - TEXT_Y_START - 20;
 
     // Subtle large decorative quote (top-right)
     ctx.fillStyle = 'rgba(255,77,0,0.07)';
-    ctx.font = '800 200px "Syne", sans-serif';
+    ctx.font = '800 220px "Syne", sans-serif';
     ctx.letterSpacing = '0px';
     ctx.textAlign = 'right';
-    ctx.fillText('\u201C', W - 40, 215);
+    ctx.fillText('\u201C', W - 30, 260);
     ctx.textAlign = 'left';
 
     // Orange opening quote
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '800 56px "Syne", sans-serif';
-    ctx.fillText('\u201C', RX, 140);
+    ctx.font = '800 64px "Syne", sans-serif';
+    ctx.fillText('\u201C', RX, 295);
 
     // Adaptive font size: start at 38px, step down by 2 until text fits
     let fontSize = 38;
@@ -544,19 +535,7 @@
     ctx.fillStyle = '#1a1a1a';
     lines.forEach((l, i) => ctx.fillText(l, RX, TEXT_Y_START + i * lineH));
 
-    // Footer: tag pill + brand
-    ctx.fillStyle = 'rgba(0,0,0,0.07)';
-    _rrect(ctx, RX, FY - 18, 118, 28, 14);
-    ctx.fill();
-
-    ctx.fillStyle = '#FF4D00';
-    ctx.beginPath(); ctx.arc(RX + 16, FY - 4, 3, 0, Math.PI * 2); ctx.fill();
-
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.font = '400 9px "Space Mono", monospace';
-    ctx.letterSpacing = '2px';
-    ctx.fillText('WISDOM', RX + 26, FY);
-
+    // Footer: brand only
     ctx.fillStyle = '#FF4D00';
     ctx.font = '400 22px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
