@@ -494,7 +494,7 @@
 
     // Bottom brand on left
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '400 10px "Space Mono", monospace';
+    ctx.font = '400 30px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'center';
     ctx.fillText('MYDADI.IN', LW / 2, H - 24);
@@ -558,7 +558,7 @@
     ctx.fillText('WISDOM', RX + 26, FY);
 
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '400 11px "Space Mono", monospace';
+    ctx.font = '400 22px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'right';
     ctx.fillText('MYDADI.IN', W - PAD, FY);
