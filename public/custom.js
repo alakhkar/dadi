@@ -428,131 +428,75 @@
       .trim();
   }
 
-  function _wrapLines(ctx, text, maxWidth) {
-    const paragraphs = text.split('\n');
-    const lines = [];
-    for (const para of paragraphs) {
-      if (!para.trim()) { lines.push(''); continue; }
-      const words = para.split(' ').filter(Boolean);
-      let line = '';
-      for (const word of words) {
-        const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
-      }
-      if (line) lines.push(line);
-    }
-    return lines;
+  /* ── Load Google Fonts for share card ── */
+  (function () {
+    if (document.querySelector('link[data-dadi-share-fonts]')) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.setAttribute('data-dadi-share-fonts', '1');
+    l.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap';
+    document.head.appendChild(l);
+  })();
+
+  /* ── Lazy-load html-to-image from CDN ── */
+  let _h2iLib = null;
+  function _loadH2I() {
+    if (_h2iLib) return Promise.resolve(_h2iLib);
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js';
+      s.onload = () => { _h2iLib = window.htmlToImage; resolve(_h2iLib); };
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function _escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   async function _generateCard(text) {
-    const W = 1080, H = 1080;
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
+    const lib = await _loadH2I();
+    await document.fonts.ready;
 
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
+    const CARD_W = 1200, CARD_H = 628;
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${CARD_W}px;height:${CARD_H}px;display:flex;overflow:hidden;`;
+    el.innerHTML = `
+      <div style="width:380px;flex-shrink:0;background:#FF4D00;display:flex;flex-direction:column;justify-content:space-between;padding:44px 36px;position:relative;overflow:hidden;">
+        <div style="position:absolute;width:280px;height:280px;border-radius:50%;border:1px solid rgba(255,255,255,0.12);bottom:-80px;right:-80px;"></div>
+        <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);bottom:-20px;right:-20px;"></div>
+        <div style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.5);">AI-powered</div>
+        <div>
+          <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+            <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:#fff;line-height:1;">PD</span>
+          </div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:32px;color:#fff;line-height:1.1;letter-spacing:-0.5px;">
+            <span style="display:block;">Pushpa</span><span style="display:block;">Dadi</span>
+          </div>
+          <div style="font-family:'DM Sans',sans-serif;font-weight:300;font-size:13px;color:rgba(255,255,255,0.6);margin-top:8px;letter-spacing:0.3px;">Jaipur, Rajasthan</div>
+        </div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.35);text-transform:uppercase;">mydadi.in</div>
+      </div>
+      <div style="flex:1;background:#0A0A0A;display:flex;flex-direction:column;justify-content:center;padding:48px 56px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:20px;right:40px;font-family:'Syne',sans-serif;font-weight:800;font-size:200px;color:rgba(255,77,0,0.06);line-height:1;user-select:none;">\u201C</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:72px;color:#FF4D00;line-height:0.6;margin-bottom:24px;position:relative;z-index:1;">\u201C</div>
+        <p style="font-family:'DM Sans',sans-serif;font-weight:300;font-style:italic;font-size:26px;line-height:1.6;color:rgba(255,255,255,0.92);margin:0;position:relative;z-index:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;">${_escHtml(text)}</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:36px;position:relative;z-index:1;">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.08);border-radius:100px;padding:6px 16px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#FF4D00;flex-shrink:0;"></div>
+            <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.4);text-transform:uppercase;">wisdom</span>
+          </div>
+          <div style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:#FF4D00;text-transform:uppercase;">MYDADI.IN</div>
+        </div>
+      </div>`;
 
-    // Inner border
-    const BRD = 36;
-    ctx.strokeStyle = '#eacfba';
-    ctx.lineWidth = 3;
-    _rrect(ctx, BRD, BRD, W - BRD * 2, H - BRD * 2, 20);
-    ctx.stroke();
-
-    // Logo at top center
-    await fetch('/public/logo_light.png')
-      .then(r => r.blob())
-      .then(blob => new Promise(resolve => {
-        const url = URL.createObjectURL(blob);
-        const logo = new Image();
-        logo.onload = () => {
-          const LOGO_H = 160;
-          const LOGO_W = logo.naturalWidth * (LOGO_H / logo.naturalHeight);
-          ctx.drawImage(logo, (W - LOGO_W) / 2, BRD + 24, LOGO_W, LOGO_H);
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        logo.onerror = resolve;
-        logo.src = url;
-      }))
-      .catch(() => {});
-
-    // Decorative quote mark (top-left)
-    ctx.fillStyle = 'rgba(139,26,26,0.13)';
-    ctx.font = '260px Georgia, serif';
-    ctx.fillText('\u201C', 68, 300);
-
-    // Message text
-    const PAD = 90, TEXT_X = PAD, TEXT_MAX = W - PAD * 2;
-    const FONT_SIZE = 48, LINE_H = 72;
-    ctx.fillStyle = '#2d1a10';
-    ctx.font = `${FONT_SIZE}px Georgia, 'Times New Roman', serif`;
-
-    const allLines = _wrapLines(ctx, text, TEXT_MAX);
-    const MAX_LINES = 9;
-    let displayLines = allLines.slice(0, MAX_LINES);
-    if (allLines.length > MAX_LINES) {
-      displayLines[MAX_LINES - 1] = displayLines[MAX_LINES - 1].replace(/\s+\S*$/, '') + '\u2026';
+    document.body.appendChild(el);
+    try {
+      return await lib.toPng(el, { width: CARD_W, height: CARD_H, pixelRatio: 1 });
+    } finally {
+      el.remove();
     }
-
-    const TEXT_Y_START = 320;
-    displayLines.forEach((line, i) => {
-      if (line === '') return;
-      ctx.fillText(line, TEXT_X, TEXT_Y_START + i * LINE_H);
-    });
-
-    // Decorative closing quote mark (bottom-right)
-    ctx.fillStyle = 'rgba(139,26,26,0.13)';
-    ctx.font = '260px Georgia, serif';
-    const closeQuoteW = ctx.measureText('\u201D').width;
-    ctx.fillText('\u201D', W - 68 - closeQuoteW, H - 190);
-
-    // Divider above branding
-    const DIV_Y = H - 170;
-    ctx.strokeStyle = '#eacfba';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(PAD, DIV_Y); ctx.lineTo(W - PAD, DIV_Y);
-    ctx.stroke();
-
-    // Branding row
-    const BRAND_Y = H - 100;
-
-    // "Dadi AI" in serif red
-    ctx.fillStyle = '#8B1A1A';
-    ctx.font = 'bold 52px Georgia, serif';
-    ctx.fillText('Dadi AI', PAD, BRAND_Y);
-
-    // Dot separator
-    const aiTextW = ctx.measureText('Dadi AI').width;
-    ctx.fillStyle = '#c0a080';
-    ctx.font = '40px Georgia, serif';
-    ctx.fillText('\u00B7', PAD + aiTextW + 18, BRAND_Y - 4);
-    const dotW = ctx.measureText('\u00B7').width;
-
-    // URL
-    ctx.fillStyle = '#9e7a5a';
-    ctx.font = '40px Inter, Arial, sans-serif';
-    ctx.fillText('www.mydadi.in', PAD + aiTextW + 18 + dotW + 16, BRAND_Y - 2);
-
-    return canvas.toDataURL('image/png');
-  }
-
-  function _rrect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
   }
 
   /* ── Share modal ── */
