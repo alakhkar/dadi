@@ -29,7 +29,9 @@ SUPABASE_KEY          = os.environ["SUPABASE_KEY"]
 DATABASE_URL          = os.environ["DATABASE_URL"]
 RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
 EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
-ANALYTICS_ADMIN_TOKEN = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
+ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
+ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
+ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
@@ -264,8 +266,10 @@ ensure_knowledge_uploaded()
 try:
     import asyncio as _asyncio
     from chainlit.server import app as _cl_app
+    import hmac as _hmac
     from fastapi import Request
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, HTMLResponse
+    from dashboard import build_dashboard_html
 
     @_cl_app.post("/auth/request-otp")
     async def auth_request_otp(request: Request):
@@ -324,8 +328,112 @@ try:
 
         return JSONResponse(data)
 
+    _ANALYTICS_LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dadi AI — Analytics Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #FDF6F0; color: #2d1a10;
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { background: #fff; border: 1px solid #f0d9c8; border-radius: 16px;
+          padding: 2.5rem 2rem; width: 100%; max-width: 360px;
+          box-shadow: 0 4px 20px rgba(139,26,26,.08); text-align: center; }
+  h1 { font-family: 'Playfair Display', serif; color: #8B1A1A; font-size: 1.5rem; margin-bottom: 0.4rem; }
+  .sub { color: #9e7a5a; font-size: 0.82rem; margin-bottom: 2rem; }
+  .field { margin-bottom: 1rem; }
+  label { display: block; text-align: left; font-size: 0.8rem; color: #9e7a5a;
+          text-transform: uppercase; letter-spacing: .05em; margin-bottom: 0.4rem; }
+  input[type=email], input[type=password] {
+    width: 100%; padding: 0.65rem 0.9rem; border: 1px solid #f0d9c8;
+    border-radius: 8px; font-size: 0.95rem; outline: none; transition: border-color .2s; }
+  input[type=email]:focus, input[type=password]:focus { border-color: #8B1A1A; }
+  button { margin-top: 0.5rem; width: 100%; padding: 0.7rem; background: #8B1A1A;
+           color: #fff; border: none; border-radius: 8px; font-size: 0.95rem;
+           font-weight: 500; cursor: pointer; transition: background .2s; }
+  button:hover { background: #6e1414; }
+  .error { color: #c0392b; font-size: 0.82rem; margin-top: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Dadi AI</h1>
+  <p class="sub">Analytics — admin access only</p>
+  <form method="POST" action="/auth/analytics">
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="admin@example.com" autofocus required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+    </div>
+    <button type="submit">Sign in</button>
+    {error_html}
+  </form>
+</div>
+</body>
+</html>"""
+
+    def _check_admin_credentials(email: str, password: str) -> bool:
+        if not ANALYTICS_ADMIN_EMAIL or not ANALYTICS_ADMIN_PASSWORD:
+            return False
+        email_ok    = _hmac.compare_digest(email.lower(),    ANALYTICS_ADMIN_EMAIL.lower())
+        password_ok = _hmac.compare_digest(password,         ANALYTICS_ADMIN_PASSWORD)
+        return email_ok and password_ok
+
+    @_cl_app.get("/auth/analytics")
+    async def admin_analytics_login(request: Request):
+        html = _ANALYTICS_LOGIN_HTML.replace("{error_html}", "")
+        return HTMLResponse(html)
+
+    @_cl_app.post("/auth/analytics")
+    async def admin_analytics_dashboard(request: Request):
+        form = await request.form()
+        email    = (form.get("email")    or "").strip()
+        password = (form.get("password") or "").strip()
+        if not _check_admin_credentials(email, password):
+            html = _ANALYTICS_LOGIN_HTML.replace(
+                "{error_html}",
+                '<p class="error">Invalid email or password.</p>',
+            )
+            return HTMLResponse(html, status_code=401)
+
+        views = [
+            "v_kpi_summary", "v_dau", "v_user_type_ratio", "v_rag_usage",
+            "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
+        ]
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            view_responses, audit_response = await _asyncio.gather(
+                _asyncio.gather(*[
+                    client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
+                    for v in views
+                ], return_exceptions=True),
+                client.get(
+                    f"{SUPABASE_URL}/rest/v1/analytics_events"
+                    "?event_name=eq.message_sent&order=created_at.desc&limit=500",
+                    headers=SUPA_HEADERS,
+                ),
+            )
+
+        data = {}
+        for view, resp in zip(views, view_responses):
+            if isinstance(resp, Exception):
+                data[view] = []
+            elif resp.status_code == 200:
+                data[view] = resp.json()
+            else:
+                data[view] = []
+        data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
+
+        return HTMLResponse(build_dashboard_html(data))
+
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
+    print("[Analytics] Dashboard registered at GET/POST /auth/analytics ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
