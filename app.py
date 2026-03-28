@@ -55,7 +55,7 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
 if LLM_PROVIDER == "sarvam":
     from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
     _hf_endpoint = HuggingFaceEndpoint(
-        repo_id="sarvam/sarvam-105b",
+        repo_id="sarvamai/sarvam-105b",
         huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
         temperature=0.8,
         streaming=True,
