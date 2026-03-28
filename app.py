@@ -32,8 +32,6 @@ EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.de
 ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
-LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq" or "sarvam"
-SARVAM_API_KEY        = os.environ.get("SARVAM_API_KEY", "")
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
@@ -53,26 +51,12 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
     huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
 )
 
-if LLM_PROVIDER == "sarvam":
-    if not SARVAM_API_KEY:
-        raise ValueError("SARVAM_API_KEY is required when LLM_PROVIDER=sarvam")
-    from langchain_openai import ChatOpenAI
-    LLM = ChatOpenAI(
-        model="sarvam-105b",
-        api_key=SARVAM_API_KEY,
-        base_url="https://api.sarvam.ai/v1",
-        temperature=0.8,
-        streaming=True,
-    )
-    print("[LLM] Using Sarvam AI (sarvam-105b)")
-else:
-    LLM = ChatGroq(
-        model="openai/gpt-oss-120b",
-        api_key=GROQ_API_KEY,
-        temperature=0.8,
-        streaming=True,
-    )
-    print("[LLM] Using Groq (gpt-oss-120b)")
+LLM = ChatGroq(
+    model="openai/gpt-oss-120b",
+    api_key=GROQ_API_KEY,
+    temperature=0.8,
+    streaming=True,
+)
 
 # ─────────────────────────────────────────────
 # 4. SUPABASE REST HELPERS
