@@ -56,16 +56,12 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
 if LLM_PROVIDER == "sarvam":
     if not SARVAM_API_KEY:
         raise ValueError("SARVAM_API_KEY is required when LLM_PROVIDER=sarvam")
-    from langchain_openai import ChatOpenAI
-    LLM = ChatOpenAI(
-        model="sarvam-105b",
-        api_key=SARVAM_API_KEY,
-        base_url="https://api.sarvam.ai/v1",
-        temperature=0.8,
-        streaming=True,
-    )
-    print("[LLM] Using Sarvam AI direct API (sarvam-105b)")
+    from sarvamai import SarvamAI as _SarvamAI
+    sarvam_client = _SarvamAI(api_subscription_key=SARVAM_API_KEY)
+    LLM = None
+    print("[LLM] Using Sarvam AI direct SDK (sarvam-105b)")
 else:
+    sarvam_client = None
     LLM = ChatGroq(
         model="openai/gpt-oss-120b",
         api_key=GROQ_API_KEY,
@@ -73,6 +69,73 @@ else:
         streaming=True,
     )
     print("[LLM] Using Groq (gpt-oss-120b)")
+
+
+# ── LLM helpers (provider-agnostic) ──────────────────────────────────────────
+
+def _to_sarvam_messages(langchain_msgs: list) -> list[dict]:
+    role_map = {
+        "SystemMessage":  "system",
+        "HumanMessage":   "user",
+        "AIMessage":      "assistant",
+    }
+    return [
+        {"role": role_map.get(type(m).__name__, "user"), "content": m.content}
+        for m in langchain_msgs
+    ]
+
+
+async def _astream_llm(langchain_msgs: list):
+    """Async generator that yields string tokens from the active LLM provider."""
+    if LLM_PROVIDER == "sarvam":
+        import threading
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def _worker():
+            try:
+                stream = sarvam_client.chat.completions(
+                    model="sarvam-105b",
+                    messages=_to_sarvam_messages(langchain_msgs),
+                    temperature=0.8,
+                    stream=True,
+                )
+                for chunk in stream:
+                    token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
+                    if token:
+                        loop.call_soon_threadsafe(queue.put_nowait, token)
+            except Exception as e:
+                print(f"[Sarvam] Stream error: {e}")
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        threading.Thread(target=_worker, daemon=True).start()
+        while True:
+            token = await queue.get()
+            if token is None:
+                break
+            yield token
+    else:
+        async for chunk in LLM.astream(langchain_msgs):
+            yield chunk.content
+
+
+async def _ainvoke_llm(langchain_msgs: list) -> str:
+    """Single-turn LLM call, returns full response string."""
+    if LLM_PROVIDER == "sarvam":
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: sarvam_client.chat.completions(
+                model="sarvam-105b",
+                messages=_to_sarvam_messages(langchain_msgs),
+                temperature=0.5,
+            ),
+        )
+        return response.choices[0].message.content
+    else:
+        response = await LLM.ainvoke(langchain_msgs)
+        return response.content
 
 # ─────────────────────────────────────────────
 # 4. SUPABASE REST HELPERS
@@ -239,8 +302,7 @@ async def _extract_and_save_memories(email: str, messages: list) -> int:
     )
     saved = 0
     try:
-        response = await LLM.ainvoke([HumanMessage(content=prompt)])
-        text = response.content.strip()
+        text = (await _ainvoke_llm([HumanMessage(content=prompt)])).strip()
         if text.startswith("```"):
             text = text.split("```")[1].lstrip("json").strip()
         facts = json.loads(text)
@@ -555,9 +617,9 @@ async def on_message(message: cl.Message):
             print(f"[RAG] Retrieval error: {e}")
 
         llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context)] + history_msgs + [HumanMessage(content=user_text)]
-        async for chunk in LLM.astream(llm_msgs):
-            full_reply += chunk.content
-            await msg.stream_token(chunk.content)
+        async for token in _astream_llm(llm_msgs):
+            full_reply += token
+            await msg.stream_token(token)
 
     except Exception as e:
         full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
