@@ -33,6 +33,7 @@ ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
 LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq" or "sarvam"
+SARVAM_API_KEY        = os.environ.get("SARVAM_API_KEY", "")
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
@@ -53,15 +54,17 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
 )
 
 if LLM_PROVIDER == "sarvam":
-    from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-    _hf_endpoint = HuggingFaceEndpoint(
-        repo_id="sarvamai/sarvam-105b",
-        huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+    if not SARVAM_API_KEY:
+        raise ValueError("SARVAM_API_KEY is required when LLM_PROVIDER=sarvam")
+    from langchain_openai import ChatOpenAI
+    LLM = ChatOpenAI(
+        model="sarvam-m",
+        api_key=SARVAM_API_KEY,
+        base_url="https://api.sarvam.ai/v1",
         temperature=0.8,
         streaming=True,
     )
-    LLM = ChatHuggingFace(llm=_hf_endpoint)
-    print("[LLM] Using Sarvam AI via HuggingFace (sarvam/sarvam-105b)")
+    print("[LLM] Using Sarvam AI direct API (sarvam-m)")
 else:
     LLM = ChatGroq(
         model="openai/gpt-oss-120b",
