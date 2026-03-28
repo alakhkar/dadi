@@ -378,6 +378,9 @@ try:
 </body>
 </html>"""
 
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import HTMLResponse as _HTMLResponse
+
     def _check_admin_credentials(email: str, password: str) -> bool:
         if not ANALYTICS_ADMIN_EMAIL or not ANALYTICS_ADMIN_PASSWORD:
             return False
@@ -385,23 +388,7 @@ try:
         password_ok = _hmac.compare_digest(password,         ANALYTICS_ADMIN_PASSWORD)
         return email_ok and password_ok
 
-    @_cl_app.get("/auth/analytics")
-    async def admin_analytics_login(request: Request):
-        html = _ANALYTICS_LOGIN_HTML.replace("{error_html}", "")
-        return HTMLResponse(html)
-
-    @_cl_app.post("/auth/analytics")
-    async def admin_analytics_dashboard(request: Request):
-        form = await request.form()
-        email    = (form.get("email")    or "").strip()
-        password = (form.get("password") or "").strip()
-        if not _check_admin_credentials(email, password):
-            html = _ANALYTICS_LOGIN_HTML.replace(
-                "{error_html}",
-                '<p class="error">Invalid email or password.</p>',
-            )
-            return HTMLResponse(html, status_code=401)
-
+    async def _fetch_analytics_data() -> dict:
         views = [
             "v_kpi_summary", "v_dau", "v_user_type_ratio", "v_rag_usage",
             "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
@@ -418,7 +405,6 @@ try:
                     headers=SUPA_HEADERS,
                 ),
             )
-
         data = {}
         for view, resp in zip(views, view_responses):
             if isinstance(resp, Exception):
@@ -428,12 +414,34 @@ try:
             else:
                 data[view] = []
         data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
+        return data
 
-        return HTMLResponse(build_dashboard_html(data))
+    class _AnalyticsMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            if request.url.path != "/auth/analytics":
+                return await call_next(request)
+            if request.method == "GET":
+                html = _ANALYTICS_LOGIN_HTML.replace("{error_html}", "")
+                return _HTMLResponse(html)
+            if request.method == "POST":
+                form = await request.form()
+                email    = (form.get("email")    or "").strip()
+                password = (form.get("password") or "").strip()
+                if not _check_admin_credentials(email, password):
+                    html = _ANALYTICS_LOGIN_HTML.replace(
+                        "{error_html}",
+                        '<p class="error">Invalid email or password.</p>',
+                    )
+                    return _HTMLResponse(html, status_code=401)
+                data = await _fetch_analytics_data()
+                return _HTMLResponse(build_dashboard_html(data))
+            return await call_next(request)
+
+    _cl_app.add_middleware(_AnalyticsMiddleware)
 
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
-    print("[Analytics] Dashboard registered at GET/POST /auth/analytics ✓")
+    print("[Analytics] Dashboard middleware registered at GET/POST /auth/analytics ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
