@@ -58,13 +58,13 @@ if LLM_PROVIDER == "sarvam":
         raise ValueError("SARVAM_API_KEY is required when LLM_PROVIDER=sarvam")
     from langchain_openai import ChatOpenAI
     LLM = ChatOpenAI(
-        model="sarvam-m",
+        model="sarvam-105b",
         api_key=SARVAM_API_KEY,
         base_url="https://api.sarvam.ai/v1",
         temperature=0.8,
         streaming=True,
     )
-    print("[LLM] Using Sarvam AI direct API (sarvam-m)")
+    print("[LLM] Using Sarvam AI direct API (sarvam-105b)")
 else:
     LLM = ChatGroq(
         model="openai/gpt-oss-120b",
