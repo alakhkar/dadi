@@ -53,15 +53,15 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
 )
 
 if LLM_PROVIDER == "deepseek":
-    from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-    _hf_llm = HuggingFaceEndpoint(
-        repo_id="deepseek-ai/DeepSeek-V3-0324",
-        huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+    from langchain_openai import ChatOpenAI
+    LLM = ChatOpenAI(
+        model="deepseek-ai/DeepSeek-V3.2:novita",
+        api_key=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+        base_url="https://router.huggingface.co/v1",
         temperature=0.8,
         streaming=True,
     )
-    LLM = ChatHuggingFace(llm=_hf_llm)
-    print("[LLM] Using DeepSeek-V3-0324 via HuggingFace")
+    print("[LLM] Using DeepSeek-V3.2 via HuggingFace router (novita)")
 else:
     LLM = ChatGroq(
         model="openai/gpt-oss-120b",
