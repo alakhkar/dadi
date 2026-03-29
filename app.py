@@ -32,6 +32,7 @@ EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.de
 ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
+LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq" or "deepseek"
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
@@ -51,12 +52,24 @@ EMBEDDINGS = HuggingFaceEndpointEmbeddings(
     huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
 )
 
-LLM = ChatGroq(
-    model="openai/gpt-oss-120b",
-    api_key=GROQ_API_KEY,
-    temperature=0.8,
-    streaming=True,
-)
+if LLM_PROVIDER == "deepseek":
+    from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+    _hf_llm = HuggingFaceEndpoint(
+        repo_id="deepseek-ai/DeepSeek-V3-0324",
+        huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+        temperature=0.8,
+        streaming=True,
+    )
+    LLM = ChatHuggingFace(llm=_hf_llm)
+    print("[LLM] Using DeepSeek-V3-0324 via HuggingFace")
+else:
+    LLM = ChatGroq(
+        model="openai/gpt-oss-120b",
+        api_key=GROQ_API_KEY,
+        temperature=0.8,
+        streaming=True,
+    )
+    print("[LLM] Using Groq (gpt-oss-120b)")
 
 # ─────────────────────────────────────────────
 # 4. SUPABASE REST HELPERS
