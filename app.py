@@ -273,6 +273,13 @@ def ensure_knowledge_uploaded():
 print("[Startup] Building Dadi's brain...")
 ensure_knowledge_uploaded()
 
+print("[Startup] Pre-warming embedding model...")
+try:
+    EMBEDDINGS.embed_query("warmup")
+    print("[Startup] Embedding model warmed up ✓")
+except Exception as e:
+    print(f"[Startup] Embedding warmup failed (non-fatal): {e}")
+
 # ─────────────────────────────────────────────
 # 7. OTP REST ENDPOINT
 # ─────────────────────────────────────────────
