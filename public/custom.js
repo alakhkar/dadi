@@ -57,10 +57,16 @@
     // White background on the panel itself
     rightPanel.style.background = '#ffffff';
 
-    // Swap the image: remove dark filter, show dadi.png
+    // Swap the image: pick a random Dadi image from /public/images/
+    const _dadiImages = [
+      '/public/images/dadi.png',
+      '/public/images/dadi_dancing.png',
+      '/public/images/dadi_karate.png',
+      '/public/images/dadi_dancing_with_smirk.png',
+    ];
     const img = rightPanel.querySelector('img');
     if (img) {
-      img.src = '/public/dadi.png';
+      img.src = _dadiImages[Math.floor(Math.random() * _dadiImages.length)];
       img.alt = 'Dadi';
       img.style.cssText = [
         'position:absolute', 'inset:0', 'height:100%', 'width:100%',
