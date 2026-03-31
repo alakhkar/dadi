@@ -128,7 +128,7 @@ _CRICKET_KEYWORDS = {
     "runs", "t20", "test", "odi", "innings", "over", "boundary", "six",
     "rcb", "csk", "mi", "kkr", "srh", "dc", "pbks", "rr", "gt", "lsg",
     "virat", "rohit", "dhoni", "bumrah", "player of the match",
-    "india won", "india lost", "team india", "points table", "standings",
+    "india won", "india lost", "team india", "points table", "standings", "latest scores"
 }
 
 def _is_cricket_query(text: str) -> bool:
