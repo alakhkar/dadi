@@ -119,6 +119,20 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
         return []
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
 
+async def _web_search(query: str, max_results: int = 3) -> list[dict]:
+    """DuckDuckGo search, returns list of {title, body, href}. Never raises."""
+    try:
+        from duckduckgo_search import DDGS
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            None,
+            lambda: list(DDGS().text(query, max_results=max_results))
+        )
+        return results
+    except Exception as e:
+        print(f"[Search] DuckDuckGo failed: {e}")
+        return []
+
 # ─────────────────────────────────────────────
 # 5. OTP HELPERS
 # ─────────────────────────────────────────────
@@ -550,15 +564,25 @@ async def on_message(message: cl.Message):
         ) if memories else ""
 
         rag_context = ""
+        search_context = ""
         try:
-            docs = await _retrieve(user_text)
+            docs, search_results = await asyncio.gather(
+                _retrieve(user_text),
+                _web_search(user_text),
+            )
             if docs:
                 rag_used, rag_doc_count = True, len(docs)
                 rag_context = "\n\n---\nDadi's ancient knowledge (use only if relevant):\n" + "\n\n".join(d.page_content for d in docs)
+            if search_results:
+                search_context = (
+                    "\n\n---\nWeb search results (use ONLY if Dadi is genuinely unsure — "
+                    "present naturally, not as a list of links):\n" +
+                    "\n\n".join(f"{r['title']}: {r['body']}" for r in search_results)
+                )
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
 
-        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context)] + history_msgs + [HumanMessage(content=user_text)]
+        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context)] + history_msgs + [HumanMessage(content=user_text)]
         async for chunk in LLM.astream(llm_msgs):
             full_reply += chunk.content
             await msg.stream_token(chunk.content)
