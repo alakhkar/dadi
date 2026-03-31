@@ -119,16 +119,16 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
         return []
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
 
-# ── Cricket (ESPNcricinfo) ─────────────────────────────────────────────────────
+# ── Cricket (CricAPI) ─────────────────────────────────────────────────────────
 
 _CRICKET_CACHE: dict = {"context": "", "ts": 0.0}
-_CRICKET_TTL   = 60  # seconds — refresh live data every minute
+_CRICKET_TTL   = 120  # seconds
 _CRICKET_KEYWORDS = {
     "cricket", "ipl", "match", "score", "wicket", "batting", "bowling",
     "runs", "t20", "test", "odi", "innings", "over", "boundary", "six",
     "rcb", "csk", "mi", "kkr", "srh", "dc", "pbks", "rr", "gt", "lsg",
     "virat", "rohit", "dhoni", "bumrah", "player of the match",
-    "india won", "india lost", "team india",
+    "india won", "india lost", "team india", "points table", "standings",
 }
 
 def _is_cricket_query(text: str) -> bool:
@@ -136,50 +136,85 @@ def _is_cricket_query(text: str) -> bool:
     return any(kw in lower for kw in _CRICKET_KEYWORDS)
 
 async def _get_cricket_context() -> str:
-    """Fetch live/recent matches from ESPNcricinfo. Cached for 60s."""
+    """Fetch live matches + IPL points table from CricAPI. Cached for 120s."""
     import time
+    cricapi_key = os.environ.get("CRICAPI_KEY", "")
+    if not cricapi_key:
+        return ""
     now = time.time()
     if _CRICKET_CACHE["context"] and now - _CRICKET_CACHE["ts"] < _CRICKET_TTL:
         return _CRICKET_CACHE["context"]
     try:
-        async with httpx.AsyncClient(
-            timeout=8.0,
-            headers={"User-Agent": "Mozilla/5.0"},
-        ) as client:
-            matches_resp, standings_resp = await asyncio.gather(
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            matches_resp, series_resp = await asyncio.gather(
                 client.get(
-                    "https://hs-consumer-api.espncricinfo.com/v1/pages/matches/current",
-                    params={"lang": "en"},
+                    "https://api.cricapi.com/v1/currentMatches",
+                    params={"apikey": cricapi_key, "offset": 0},
                 ),
                 client.get(
-                    "https://hs-consumer-api.espncricinfo.com/v1/pages/series/standings",
-                    params={"lang": "en", "seriesId": "1"},  # placeholder; updated below
+                    "https://api.cricapi.com/v1/series",
+                    params={"apikey": cricapi_key, "offset": 0, "search": "IPL"},
                 ),
                 return_exceptions=True,
             )
 
         lines = []
 
-        # ── Live / recent matches ──────────────────────────────────────────
+        # ── Current / live matches ─────────────────────────────────────────
         if not isinstance(matches_resp, Exception) and matches_resp.status_code == 200:
-            matches = matches_resp.json().get("matches", [])
-            if matches:
-                lines.append("Live/Recent Cricket Matches:")
-                for m in matches[:8]:
-                    title   = m.get("title", "")
-                    status  = m.get("statusText") or m.get("status", "")
-                    series  = (m.get("series") or {}).get("name", "")
-                    teams   = []
-                    for t in m.get("teams", []):
-                        name  = (t.get("team") or {}).get("shortName") or (t.get("team") or {}).get("name", "")
-                        score = t.get("scoreInfo", "")
-                        teams.append(f"{name} {score}".strip() if name else "")
-                    teams = [t for t in teams if t]
-                    line = f"• {title}"
-                    if series:  line += f" [{series}]"
-                    if teams:   line += f": {' vs '.join(teams)}"
-                    if status:  line += f" — {status}"
-                    lines.append(line)
+            mdata = matches_resp.json()
+            if mdata.get("status") == "success":
+                matches = mdata.get("data", [])
+                # Prioritise IPL, fall back to all matches
+                ipl = [m for m in matches if "ipl" in m.get("name", "").lower()]
+                display = ipl if ipl else matches[:6]
+                if display:
+                    lines.append("Current Cricket Matches:")
+                    for m in display:
+                        name   = m.get("name", "")
+                        status = m.get("status", "")
+                        scores = m.get("score", [])
+                        score_parts = [
+                            f"{s.get('inning','').split(',')[0]}: "
+                            f"{s.get('r','')} / {s.get('w','')} "
+                            f"({s.get('o','')} ov)"
+                            for s in scores
+                        ]
+                        lines.append(f"• {name}")
+                        if score_parts:
+                            lines.append("  " + " | ".join(score_parts))
+                        if status:
+                            lines.append(f"  {status}")
+
+        # ── IPL points table ───────────────────────────────────────────────
+        ipl_series_id = None
+        if not isinstance(series_resp, Exception) and series_resp.status_code == 200:
+            sdata = series_resp.json()
+            if sdata.get("status") == "success":
+                for s in sdata.get("data", []):
+                    if "ipl" in s.get("name", "").lower():
+                        ipl_series_id = s.get("id")
+                        break
+
+        if ipl_series_id:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                pts_resp = await client.get(
+                    "https://api.cricapi.com/v1/series_points",
+                    params={"apikey": cricapi_key, "id": ipl_series_id},
+                )
+            if pts_resp.status_code == 200:
+                pdata = pts_resp.json()
+                if pdata.get("status") == "success":
+                    table = pdata.get("data", [])
+                    if table:
+                        lines.append("\nIPL Points Table:")
+                        for row in table:
+                            team = row.get("teamName") or row.get("team", "")
+                            p    = row.get("p") or row.get("matchesPlayed", "")
+                            w    = row.get("w") or row.get("win", "")
+                            l    = row.get("l") or row.get("loss", "")
+                            pts  = row.get("pts") or row.get("points", "")
+                            lines.append(f"  {team}: P{p} W{w} L{l} Pts{pts}")
 
         if not lines:
             return ""
@@ -187,9 +222,10 @@ async def _get_cricket_context() -> str:
         context = "\n".join(lines)
         _CRICKET_CACHE["context"] = context
         _CRICKET_CACHE["ts"]      = now
+        print(f"[Cricket] Fetched {len(lines)} lines of cricket data")
         return context
     except Exception as e:
-        print(f"[Cricket] Fetch failed: {e}")
+        print(f"[Cricket] CricAPI failed: {e}")
         return ""
 
 
@@ -659,7 +695,7 @@ async def on_message(message: cl.Message):
                     "\n\n".join(f"{r['title']}: {r['body']}" for r in search_results)
                 )
             if cricket_data:
-                cricket_context = f"\n\n---\nLive cricket data from ESPNcricinfo:\n{cricket_data}"
+                cricket_context = f"\n\n---\nLive cricket data from CricAPI:\n{cricket_data}"
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
 
