@@ -119,6 +119,80 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
         return []
     return [Document(page_content=row["content"], metadata=row.get("metadata", {})) for row in r.json()]
 
+# ── Cricket (ESPNcricinfo) ─────────────────────────────────────────────────────
+
+_CRICKET_CACHE: dict = {"context": "", "ts": 0.0}
+_CRICKET_TTL   = 60  # seconds — refresh live data every minute
+_CRICKET_KEYWORDS = {
+    "cricket", "ipl", "match", "score", "wicket", "batting", "bowling",
+    "runs", "t20", "test", "odi", "innings", "over", "boundary", "six",
+    "rcb", "csk", "mi", "kkr", "srh", "dc", "pbks", "rr", "gt", "lsg",
+    "virat", "rohit", "dhoni", "bumrah", "player of the match",
+    "india won", "india lost", "team india",
+}
+
+def _is_cricket_query(text: str) -> bool:
+    lower = text.lower()
+    return any(kw in lower for kw in _CRICKET_KEYWORDS)
+
+async def _get_cricket_context() -> str:
+    """Fetch live/recent matches from ESPNcricinfo. Cached for 60s."""
+    import time
+    now = time.time()
+    if _CRICKET_CACHE["context"] and now - _CRICKET_CACHE["ts"] < _CRICKET_TTL:
+        return _CRICKET_CACHE["context"]
+    try:
+        async with httpx.AsyncClient(
+            timeout=8.0,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            matches_resp, standings_resp = await asyncio.gather(
+                client.get(
+                    "https://hs-consumer-api.espncricinfo.com/v1/pages/matches/current",
+                    params={"lang": "en"},
+                ),
+                client.get(
+                    "https://hs-consumer-api.espncricinfo.com/v1/pages/series/standings",
+                    params={"lang": "en", "seriesId": "1"},  # placeholder; updated below
+                ),
+                return_exceptions=True,
+            )
+
+        lines = []
+
+        # ── Live / recent matches ──────────────────────────────────────────
+        if not isinstance(matches_resp, Exception) and matches_resp.status_code == 200:
+            matches = matches_resp.json().get("matches", [])
+            if matches:
+                lines.append("Live/Recent Cricket Matches:")
+                for m in matches[:8]:
+                    title   = m.get("title", "")
+                    status  = m.get("statusText") or m.get("status", "")
+                    series  = (m.get("series") or {}).get("name", "")
+                    teams   = []
+                    for t in m.get("teams", []):
+                        name  = (t.get("team") or {}).get("shortName") or (t.get("team") or {}).get("name", "")
+                        score = t.get("scoreInfo", "")
+                        teams.append(f"{name} {score}".strip() if name else "")
+                    teams = [t for t in teams if t]
+                    line = f"• {title}"
+                    if series:  line += f" [{series}]"
+                    if teams:   line += f": {' vs '.join(teams)}"
+                    if status:  line += f" — {status}"
+                    lines.append(line)
+
+        if not lines:
+            return ""
+
+        context = "\n".join(lines)
+        _CRICKET_CACHE["context"] = context
+        _CRICKET_CACHE["ts"]      = now
+        return context
+    except Exception as e:
+        print(f"[Cricket] Fetch failed: {e}")
+        return ""
+
+
 async def _web_search(query: str, max_results: int = 3) -> list[dict]:
     """DuckDuckGo search, returns list of {title, body, href}. Never raises."""
     try:
@@ -565,11 +639,16 @@ async def on_message(message: cl.Message):
 
         rag_context = ""
         search_context = ""
+        cricket_context = ""
         try:
-            docs, search_results = await asyncio.gather(
-                _retrieve(user_text),
-                _web_search(user_text),
-            )
+            is_cricket = _is_cricket_query(user_text)
+            tasks = [_retrieve(user_text), _web_search(user_text)]
+            if is_cricket:
+                tasks.append(_get_cricket_context())
+            results = await asyncio.gather(*tasks)
+            docs, search_results = results[0], results[1]
+            cricket_data = results[2] if is_cricket else ""
+
             if docs:
                 rag_used, rag_doc_count = True, len(docs)
                 rag_context = "\n\n---\nDadi's ancient knowledge (use only if relevant):\n" + "\n\n".join(d.page_content for d in docs)
@@ -579,10 +658,12 @@ async def on_message(message: cl.Message):
                     "present naturally, not as a list of links):\n" +
                     "\n\n".join(f"{r['title']}: {r['body']}" for r in search_results)
                 )
+            if cricket_data:
+                cricket_context = f"\n\n---\nLive cricket data from ESPNcricinfo:\n{cricket_data}"
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
 
-        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context)] + history_msgs + [HumanMessage(content=user_text)]
+        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context)] + history_msgs + [HumanMessage(content=user_text)]
         async for chunk in LLM.astream(llm_msgs):
             full_reply += chunk.content
             await msg.stream_token(chunk.content)
