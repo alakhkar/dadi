@@ -29,6 +29,80 @@
   _favicon.href = '/public/favicon.png';
   document.head.appendChild(_favicon);
 
+  /* ── SEO — meta tags, Open Graph, Twitter Card, JSON-LD ── */
+  (function () {
+    const SITE   = 'https://www.mydadi.in';
+    const IMG    = SITE + '/public/images/dadi.png';
+    const TITLE  = 'Dadi AI — Your Wise Indian Grandmother';
+    const DESC   = 'Meet Dadi — your AI Indian grandmother who gives real talk, heartfelt advice, and a healthy dose of desi humor. Chat about life, family, relationships, and everything in between.';
+
+    // helper: set or update a <meta> tag
+    const meta = (key, val, isProp) => {
+      const attr = isProp ? 'property' : 'name';
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el); }
+      el.content = val;
+    };
+
+    // ── Basic ────────────────────────────────────────────────────────────
+    meta('description', DESC);
+    meta('keywords', 'dadi ai, indian grandmother chatbot, desi advice, ai chatbot india, life advice ai, indian family chatbot, hindi chatbot, dadi chatbot, ask dadi, indian wisdom ai');
+    meta('robots', 'index, follow');
+    meta('author', 'Dadi AI');
+    meta('theme-color', '#8B1A1A');
+
+    // ── Open Graph ───────────────────────────────────────────────────────
+    meta('og:type',        'website',  true);
+    meta('og:url',         SITE,       true);
+    meta('og:site_name',   'Dadi AI',  true);
+    meta('og:locale',      'en_IN',    true);
+    meta('og:title',       TITLE,      true);
+    meta('og:description', DESC,       true);
+    meta('og:image',       IMG,        true);
+    meta('og:image:width', '600',      true);
+    meta('og:image:height','600',      true);
+    meta('og:image:alt',   'Dadi AI',  true);
+
+    // ── Twitter Card ─────────────────────────────────────────────────────
+    meta('twitter:card',        'summary_large_image');
+    meta('twitter:title',       TITLE);
+    meta('twitter:description', DESC);
+    meta('twitter:image',       IMG);
+    meta('twitter:image:alt',   'Dadi AI');
+
+    // ── Canonical ────────────────────────────────────────────────────────
+    if (!document.querySelector('link[rel="canonical"]')) {
+      const link = document.createElement('link');
+      link.rel = 'canonical';
+      link.href = SITE;
+      document.head.appendChild(link);
+    }
+
+    // ── JSON-LD: WebApplication ──────────────────────────────────────────
+    if (!document.getElementById('dadi-jsonld')) {
+      const s = document.createElement('script');
+      s.id   = 'dadi-jsonld';
+      s.type = 'application/ld+json';
+      s.text = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'Dadi AI',
+        url: SITE,
+        description: DESC,
+        applicationCategory: 'LifestyleApplication',
+        operatingSystem: 'All',
+        inLanguage: ['en', 'hi'],
+        image: IMG,
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+        audience: { '@type': 'Audience', audienceType: 'Indian families and youth' },
+      });
+      document.head.appendChild(s);
+    }
+
+    // ── lang attribute ───────────────────────────────────────────────────
+    if (!document.documentElement.lang) document.documentElement.lang = 'en';
+  })();
+
   /* ── Login page: white background + replace right-panel image with dadi.png ── */
   const loginCss = document.createElement('style');
   loginCss.textContent = [
