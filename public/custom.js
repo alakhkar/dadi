@@ -99,6 +99,15 @@
       document.head.appendChild(s);
     }
 
+    // ── Sitemap link ─────────────────────────────────────────────────────
+    if (!document.querySelector('link[rel="sitemap"]')) {
+      const sl = document.createElement('link');
+      sl.rel  = 'sitemap';
+      sl.type = 'application/xml';
+      sl.href = '/public/sitemap.xml';
+      document.head.appendChild(sl);
+    }
+
     // ── lang attribute ───────────────────────────────────────────────────
     if (!document.documentElement.lang) document.documentElement.lang = 'en';
   })();
