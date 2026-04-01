@@ -470,8 +470,15 @@ async function _generateCard(dadiText, userText) {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, LW, H);
 
-    // Load and draw dadi.png centered in left panel
-    await fetch('/public/images/dadi.png')
+    // Load and draw a random Dadi image in left panel
+    const _cardImages = [
+      '/public/images/dadi.png',
+      '/public/images/dadi_dancing.png',
+      '/public/images/dadi_karate.png',
+      '/public/images/dadi_dancing_with_smirk.png',
+    ];
+    const _cardImg = _cardImages[Math.floor(Math.random() * _cardImages.length)];
+    await fetch(_cardImg)
       .then(r => r.blob())
       .then(blob => new Promise(resolve => {
         const url = URL.createObjectURL(blob);
