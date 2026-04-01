@@ -22,7 +22,7 @@ default_collapse_content = true
 # Logo shown in the header
 logo = "images/dadi.png"
 custom_css = "/public/custom.css"
-custom_js = "/public/custom.js?v=15"
+custom_js = "/public/custom.js?v=16"
 
 [UI.theme]
 # Primary brand colour — warm henna red

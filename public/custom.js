@@ -457,7 +457,7 @@
     return lines;
   }
 
-async function _generateCard(text) {
+async function _generateCard(dadiText, userText) {
     await document.fonts.ready;
 
     // 4:5 aspect ratio (1080x1350 — Instagram portrait standard)
@@ -505,30 +505,63 @@ async function _generateCard(text) {
     const RX = LW + PAD;
     const TEXT_MAX_W = W - LW - PAD * 2;
     const FY = H - 70;
-    const TEXT_Y_START = 360;
-    const availableH = FY - TEXT_Y_START - 20;
 
-    // Subtle large decorative quote (top-right)
+    // ── User question section ──────────────────────────────────────────────
+    if (userText) {
+      // "YOU ASKED" label
+      ctx.fillStyle = '#9e7a5a';
+      ctx.font = '700 19px "Space Mono", monospace';
+      ctx.letterSpacing = '2px';
+      ctx.fillText('YOU ASKED', RX, 90);
+      ctx.letterSpacing = '0px';
+
+      // User message (max 3 lines, 26px)
+      ctx.font = '300 italic 26px "DM Sans", sans-serif';
+      ctx.fillStyle = '#555555';
+      const uLines = _wrapText(ctx, _cleanText(userText), TEXT_MAX_W);
+      const uMax = 3;
+      const uDisplay = uLines.slice(0, uMax);
+      if (uLines.length > uMax)
+        uDisplay[uMax - 1] = uDisplay[uMax - 1].replace(/\s+\S*$/, '') + '\u2026';
+      uDisplay.forEach((l, i) => ctx.fillText(l, RX, 136 + i * 40));
+
+      // Divider
+      const divY = 270;
+      ctx.strokeStyle = 'rgba(139,26,26,0.18)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(RX, divY);
+      ctx.lineTo(W - PAD, divY);
+      ctx.stroke();
+    }
+
+    // ── Dadi response section ──────────────────────────────────────────────
+    const DADI_TOP = userText ? 295 : 60;
+
+    // Subtle large decorative quote
     ctx.fillStyle = 'rgba(255,77,0,0.07)';
-    ctx.font = '800 220px "Syne", sans-serif';
+    ctx.font = '800 200px "Syne", sans-serif';
     ctx.letterSpacing = '0px';
     ctx.textAlign = 'right';
-    ctx.fillText('\u201C', W - 30, 260);
+    ctx.fillText('\u201C', W - 30, DADI_TOP + 200);
     ctx.textAlign = 'left';
 
     // Orange opening quote
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '800 64px "Syne", sans-serif';
-    ctx.fillText('\u201C', RX, 295);
+    ctx.font = `800 ${userText ? 54 : 64}px "Syne", sans-serif`;
+    ctx.fillText('\u201C', RX, DADI_TOP + 60);
 
-    // Adaptive font size: start at 38px, step down by 2 until text fits
-    let fontSize = 38;
+    const TEXT_Y_START = DADI_TOP + 105;
+    const availableH = FY - TEXT_Y_START - 20;
+
+    // Adaptive font size: start at 36px, step down by 2 until text fits
+    let fontSize = 36;
     let lines, lineH;
-    while (fontSize >= 16) {
+    while (fontSize >= 14) {
       ctx.font = `italic 400 ${fontSize}px "DM Sans", sans-serif`;
       ctx.letterSpacing = '0.1px';
       lineH = Math.round(fontSize * 1.55);
-      lines = _wrapText(ctx, text, TEXT_MAX_W);
+      lines = _wrapText(ctx, dadiText, TEXT_MAX_W);
       if (lines.length * lineH <= availableH) break;
       fontSize -= 2;
     }
@@ -554,10 +587,11 @@ async function _generateCard(text) {
   }
 
   /* ── Share modal ── */
-  function showShareModal(rawText) {
+  function showShareModal(rawDadiText, rawUserText) {
     document.getElementById('dadi-share-modal')?.remove();
 
-    const text = _cleanText(rawText);
+    const text = _cleanText(rawDadiText);
+    const userText = rawUserText ? _cleanText(rawUserText) : '';
     const url = 'https://www.mydadi.in';
 
     const modal = document.createElement('div');
@@ -603,7 +637,7 @@ async function _generateCard(text) {
     let _imgDataUrl = null;
     setTimeout(async () => {
       try {
-        _imgDataUrl = await _generateCard(text);
+        _imgDataUrl = await _generateCard(text, userText);
         const img = document.createElement('img');
         img.src = _imgDataUrl;
         img.alt = 'Share card';
@@ -673,6 +707,13 @@ async function _generateCard(text) {
     });
   }
 
+  function findUserMessageForArticle(dadiArticle) {
+    const all = Array.from(document.querySelectorAll('[role="article"]'));
+    const idx = all.indexOf(dadiArticle);
+    if (idx <= 0) return '';
+    return (all[idx - 1].innerText || all[idx - 1].textContent || '').trim();
+  }
+
   /* ── Inject share button into Chainlit action bar ── */
   const _decoratedBars = new WeakSet();
 
@@ -729,7 +770,9 @@ async function _generateCard(text) {
         '</svg>';
       shareBtn.onclick = e => {
         e.stopPropagation();
-        showShareModal((article.innerText || article.textContent || '').trim());
+        const dadiText = (article.innerText || article.textContent || '').trim();
+        const userText = findUserMessageForArticle(article);
+        showShareModal(dadiText, userText);
       };
       bar.appendChild(shareBtn);
     });
