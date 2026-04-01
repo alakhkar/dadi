@@ -104,7 +104,7 @@
       const sl = document.createElement('link');
       sl.rel  = 'sitemap';
       sl.type = 'application/xml';
-      sl.href = '/public/sitemap.xml';
+      sl.href = '/sitemap.xml';
       document.head.appendChild(sl);
     }
 

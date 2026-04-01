@@ -583,6 +583,24 @@ try:
 
     _cl_app.add_middleware(_AnalyticsMiddleware)
 
+    from fastapi.responses import Response as _Response
+
+    @_cl_app.get("/sitemap.xml", include_in_schema=False)
+    async def sitemap():
+        content = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://www.mydadi.in/</loc>
+    <lastmod>2026-04-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.mydadi.in/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://www.mydadi.in/"/>
+  </url>
+</urlset>"""
+        return _Response(content=content, media_type="application/xml")
+
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
     print("[Analytics] Dashboard middleware registered at GET/POST /auth/analytics ✓")
