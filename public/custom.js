@@ -471,7 +471,7 @@ async function _generateCard(text) {
     ctx.fillRect(0, 0, LW, H);
 
     // Load and draw dadi.png centered in left panel
-    await fetch('/public/dadi.png')
+    await fetch('/public/images/dadi.png')
       .then(r => r.blob())
       .then(blob => new Promise(resolve => {
         const url = URL.createObjectURL(blob);
