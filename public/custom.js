@@ -457,7 +457,21 @@
     return lines;
   }
 
-async function _generateCard(dadiText, userText) {
+function _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  async function _generateCard(dadiText, userText) {
     await document.fonts.ready;
 
     // 4:5 aspect ratio (1080x1350 — Instagram portrait standard)
@@ -505,83 +519,108 @@ async function _generateCard(dadiText, userText) {
     ctx.textAlign = 'left';
     ctx.letterSpacing = '0px';
 
-    // ── Right panel (light grey) ──
-    ctx.fillStyle = '#F5F5F5';
+    // ── Right panel ────────────────────────────────────────────────────────
+    ctx.fillStyle = '#F2EDE8';
     ctx.fillRect(LW, 0, W - LW, H);
 
-    const RX = LW + PAD;
-    const TEXT_MAX_W = W - LW - PAD * 2;
-    const FY = H - 70;
+    const RX   = LW + PAD;
+    const RMAX = W - PAD;
+    const BW   = W - LW - PAD * 2;   // bubble max width
+    const BPX  = 30;                  // bubble horizontal padding
+    const BPY  = 22;                  // bubble vertical padding
+    const FY   = H - 70;
 
-    // ── User question section ──────────────────────────────────────────────
-    if (userText) {
-      // "YOU ASKED" label
-      ctx.fillStyle = '#9e7a5a';
-      ctx.font = '700 19px "Space Mono", monospace';
-      ctx.letterSpacing = '2px';
-      ctx.fillText('YOU ASKED', RX, 90);
-      ctx.letterSpacing = '0px';
-
-      // User message (max 3 lines, 26px)
-      ctx.font = '300 italic 26px "DM Sans", sans-serif';
-      ctx.fillStyle = '#555555';
-      const uLines = _wrapText(ctx, _cleanText(userText), TEXT_MAX_W);
-      const uMax = 3;
-      const uDisplay = uLines.slice(0, uMax);
-      if (uLines.length > uMax)
-        uDisplay[uMax - 1] = uDisplay[uMax - 1].replace(/\s+\S*$/, '') + '\u2026';
-      uDisplay.forEach((l, i) => ctx.fillText(l, RX, 136 + i * 40));
-
-      // Divider
-      const divY = 270;
-      ctx.strokeStyle = 'rgba(139,26,26,0.18)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(RX, divY);
-      ctx.lineTo(W - PAD, divY);
-      ctx.stroke();
-    }
-
-    // ── Dadi response section ──────────────────────────────────────────────
-    const DADI_TOP = userText ? 295 : 60;
-
-    // Subtle large decorative quote
-    ctx.fillStyle = 'rgba(255,77,0,0.07)';
-    ctx.font = '800 200px "Syne", sans-serif';
-    ctx.letterSpacing = '0px';
-    ctx.textAlign = 'right';
-    ctx.fillText('\u201C', W - 30, DADI_TOP + 200);
+    // "DADI AI" label top-centre of right panel
+    ctx.fillStyle = '#8B1A1A';
+    ctx.font = '700 22px "Space Mono", monospace';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'center';
+    ctx.fillText('DADI AI', LW + (W - LW) / 2, 72);
     ctx.textAlign = 'left';
+    ctx.letterSpacing = '0px';
 
-    // Orange opening quote
-    ctx.fillStyle = '#FF4D00';
-    ctx.font = `800 ${userText ? 54 : 64}px "Syne", sans-serif`;
-    ctx.fillText('\u201C', RX, DADI_TOP + 60);
+    let curY = 106;
 
-    const TEXT_Y_START = DADI_TOP + 105;
-    const availableH = FY - TEXT_Y_START - 20;
+    // ── User bubble (right-aligned, light) ────────────────────────────────
+    if (userText) {
+      // sender label
+      ctx.fillStyle = '#9e7a5a';
+      ctx.font = '400 19px "DM Sans", sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('You', RMAX, curY);
+      ctx.textAlign = 'left';
+      curY += 26;
 
-    // Adaptive font size: start at 36px, step down by 2 until text fits
-    let fontSize = 36;
-    let lines, lineH;
-    while (fontSize >= 14) {
-      ctx.font = `italic 400 ${fontSize}px "DM Sans", sans-serif`;
-      ctx.letterSpacing = '0.1px';
-      lineH = Math.round(fontSize * 1.55);
-      lines = _wrapText(ctx, dadiText, TEXT_MAX_W);
-      if (lines.length * lineH <= availableH) break;
-      fontSize -= 2;
+      // measure text (max 3 lines)
+      const uFS = 24, uLH = Math.round(uFS * 1.5);
+      ctx.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      let uLines = _wrapText(ctx, userText, BW - BPX * 2);
+      if (uLines.length > 3) { uLines = uLines.slice(0, 3); uLines[2] = uLines[2].replace(/\s+\S*$/, '') + '\u2026'; }
+
+      const uBH = BPY + uFS + (uLines.length - 1) * uLH + BPY;
+      const uBX = RMAX - BW;
+
+      // bubble
+      ctx.fillStyle = '#FFFFFF';
+      _roundRect(ctx, uBX, curY, BW, uBH, 18);
+      ctx.fill();
+      // tail (bottom-right)
+      ctx.beginPath();
+      ctx.moveTo(RMAX - 18, curY + uBH);
+      ctx.lineTo(RMAX + 10, curY + uBH + 16);
+      ctx.lineTo(RMAX - 46, curY + uBH);
+      ctx.fill();
+
+      // text
+      ctx.fillStyle = '#2d1a10';
+      ctx.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      uLines.forEach((l, i) => ctx.fillText(l, uBX + BPX, curY + BPY + uFS + i * uLH));
+
+      curY += uBH + 36;
     }
-    // Hard truncate if still overflows
-    const maxLines = Math.floor(availableH / lineH);
-    if (lines.length > maxLines) {
-      lines = lines.slice(0, maxLines);
-      lines[maxLines - 1] = lines[maxLines - 1].replace(/\s+\S*$/, '') + '\u2026';
-    }
-    ctx.fillStyle = '#1a1a1a';
-    lines.forEach((l, i) => ctx.fillText(l, RX, TEXT_Y_START + i * lineH));
 
-    // Footer: brand only
+    // ── Dadi bubble (left-aligned, brand red) ─────────────────────────────
+    // sender label
+    ctx.fillStyle = '#9e7a5a';
+    ctx.font = '400 19px "DM Sans", sans-serif';
+    ctx.fillText('Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
+    curY += 26;
+
+    const dAvailTextH = FY - 40 - curY - BPY * 2;
+    let dFS = 28, dLH;
+    let dLines;
+    ctx.letterSpacing = '0.1px';
+    while (dFS >= 14) {
+      ctx.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+      dLH = Math.round(dFS * 1.55);
+      dLines = _wrapText(ctx, dadiText, BW - BPX * 2);
+      if (dFS + (dLines.length - 1) * dLH <= dAvailTextH) break;
+      dFS -= 2;
+    }
+    const dMaxL = Math.floor((dAvailTextH - dFS) / dLH) + 1;
+    if (dLines.length > dMaxL) { dLines = dLines.slice(0, dMaxL); dLines[dMaxL - 1] = dLines[dMaxL - 1].replace(/\s+\S*$/, '') + '\u2026'; }
+
+    const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
+
+    // bubble
+    ctx.fillStyle = '#8B1A1A';
+    _roundRect(ctx, RX, curY, BW, dBH, 18);
+    ctx.fill();
+    // tail (bottom-left)
+    ctx.beginPath();
+    ctx.moveTo(RX + 18, curY + dBH);
+    ctx.lineTo(RX - 10, curY + dBH + 16);
+    ctx.lineTo(RX + 46, curY + dBH);
+    ctx.fill();
+
+    // text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    ctx.letterSpacing = '0.1px';
+    dLines.forEach((l, i) => ctx.fillText(l, RX + BPX, curY + BPY + dFS + i * dLH));
+    ctx.letterSpacing = '0px';
+
+    // Footer
     ctx.fillStyle = '#FF4D00';
     ctx.font = '400 22px "Space Mono", monospace';
     ctx.letterSpacing = '3px';
