@@ -1,7 +1,6 @@
 import chainlit as cl
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 import os
-import re
 import json
 import random
 import string
@@ -30,8 +29,7 @@ SUPABASE_KEY          = os.environ["SUPABASE_KEY"]
 DATABASE_URL          = os.environ["DATABASE_URL"]
 RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
 EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
-MSG91_API_KEY         = os.environ.get("MSG91_API_KEY")
-MSG91_TEMPLATE_ID     = os.environ.get("MSG91_TEMPLATE_ID")
+
 ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
@@ -316,88 +314,6 @@ async def _send_otp_email(email: str, code: str) -> bool:
         return False
     return True
 
-# ── Phone OTP helpers ──────────────────────────────────────────────────────
-
-def _normalize_phone(raw: str) -> str:
-    """Normalize to E.164. Defaults to +91 (India) for 10-digit numbers."""
-    digits = re.sub(r'[\s\-\(\)\.]', '', raw)
-    if digits.startswith('+'):
-        return digits
-    if digits.startswith('0'):
-        digits = digits[1:]
-    if len(digits) == 10:
-        return f'+91{digits}'
-    return f'+{digits}'
-
-def _is_phone(identifier: str) -> bool:
-    cleaned = re.sub(r'[\s\-\(\)\.]', '', identifier)
-    return bool(re.match(r'^\+?\d{7,15}$', cleaned))
-
-async def _save_otp_phone(phone: str, code: str) -> bool:
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            f"{SUPABASE_URL}/rest/v1/phone_otp_codes",
-            headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-            json={"phone": phone, "code": code, "expires_at": expires_at},
-            timeout=10,
-        )
-    return r.status_code in (200, 201)
-
-def _verify_otp_phone_sync(phone: str, code: str) -> bool:
-    """Synchronous phone OTP check — safe to call from @cl.password_auth_callback."""
-    now = datetime.now(timezone.utc).isoformat()
-    try:
-        with httpx.Client() as client:
-            r = client.get(
-                f"{SUPABASE_URL}/rest/v1/phone_otp_codes",
-                params={
-                    "phone": f"eq.{phone}",
-                    "code": f"eq.{code}",
-                    "used": "eq.false",
-                    "expires_at": f"gt.{now}",
-                    "select": "id",
-                    "limit": "1",
-                },
-                headers=SUPA_HEADERS,
-                timeout=10,
-            )
-            rows = r.json() if r.status_code == 200 else []
-            if not rows:
-                return False
-            client.patch(
-                f"{SUPABASE_URL}/rest/v1/phone_otp_codes?id=eq.{rows[0]['id']}",
-                headers={**SUPA_HEADERS, "Prefer": "return=minimal"},
-                json={"used": True},
-                timeout=10,
-            )
-        return True
-    except Exception as e:
-        print(f"[OTP-Phone] Verify error: {e}")
-        return False
-
-async def _send_otp_sms(phone: str, code: str) -> bool:
-    if not MSG91_API_KEY or not MSG91_TEMPLATE_ID:
-        print(f"[OTP-SMS] No MSG91 credentials — code for {phone}: {code}")
-        return True
-    # MSG91 expects mobile without leading +, e.g. 919876543210
-    mobile = phone.lstrip('+')
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            "https://api.msg91.com/api/v5/otp",
-            params={"template_id": MSG91_TEMPLATE_ID, "mobile": mobile, "otp": code},
-            headers={"authkey": MSG91_API_KEY, "Content-Type": "application/json"},
-            timeout=15,
-        )
-    if r.status_code not in (200, 201):
-        print(f"[OTP-SMS] MSG91 error: {r.text}")
-        return False
-    resp_json = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-    if resp_json.get("type") == "error":
-        print(f"[OTP-SMS] MSG91 error: {resp_json}")
-        return False
-    return True
-
 # ─────────────────────────────────────────────
 # 6. MEMORY HELPERS
 # ─────────────────────────────────────────────
@@ -516,26 +432,6 @@ try:
             return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
         _asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
-
-    @_cl_app.post("/auth/request-otp-phone")
-    async def auth_request_otp_phone(request: Request):
-        try:
-            data = await request.json()
-        except Exception:
-            return JSONResponse({"error": "Invalid request"}, status_code=400)
-        raw_phone = data.get("phone", "").strip()
-        if not raw_phone:
-            return JSONResponse({"error": "Phone number required"}, status_code=400)
-        phone = _normalize_phone(raw_phone)
-        if not re.match(r'^\+\d{7,15}$', phone):
-            return JSONResponse({"error": "Invalid phone number"}, status_code=400)
-        code = _generate_otp()
-        if not await _save_otp_phone(phone, code):
-            return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
-        if not await _send_otp_sms(phone, code):
-            return JSONResponse({"error": "Could not send SMS, please check the number"}, status_code=500)
-        _asyncio.create_task(analytics.log_otp_requested(phone))
-        return JSONResponse({"ok": True, "phone": phone})
 
     @_cl_app.post("/auth/analytics-data")
     async def analytics_data(request: Request):
@@ -724,24 +620,12 @@ def auth_callback(username: str, password: str):
         loop.create_task(analytics.log_guest_login())
         return cl.User(identifier=guest_id, metadata={"role": "guest"})
 
-    identifier = username.strip()
-
-    # Phone OTP login: username = +91XXXXXXXXXX, password = 6-digit code
-    if _is_phone(identifier):
-        phone = _normalize_phone(identifier)
-        if _verify_otp_phone_sync(phone, password.strip()):
-            loop.create_task(analytics.log_otp_verified(phone))
-            return cl.User(identifier=phone, metadata={"role": "user", "auth_method": "phone"})
-        else:
-            loop.create_task(analytics.log_otp_failed())
-        return None
-
-    # Email OTP login: username = email, password = 6-digit code
-    email = identifier.lower()
+    # OTP login: username = email, password = 6-digit code
+    email = username.strip().lower()
     if email and "@" in email and "." in email.split("@")[-1]:
         if _verify_otp_sync(email, password.strip()):
             loop.create_task(analytics.log_otp_verified(email))
-            return cl.User(identifier=email, metadata={"role": "user", "auth_method": "email"})
+            return cl.User(identifier=email, metadata={"role": "user"})
         else:
             loop.create_task(analytics.log_otp_failed())
     return None

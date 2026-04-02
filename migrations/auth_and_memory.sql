@@ -19,18 +19,6 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 
 CREATE INDEX IF NOT EXISTS otp_codes_email_idx ON otp_codes (email);
 
--- OTP codes (phone / SMS login)
-CREATE TABLE IF NOT EXISTS phone_otp_codes (
-    id         uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
-    phone      text        NOT NULL,
-    code       text        NOT NULL,
-    expires_at timestamptz NOT NULL,
-    used       boolean     DEFAULT false,
-    created_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS phone_otp_codes_phone_idx ON phone_otp_codes (phone);
-
 -- Per-user memories
 CREATE TABLE IF NOT EXISTS user_memories (
     id         uuid        DEFAULT gen_random_uuid() PRIMARY KEY,

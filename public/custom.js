@@ -251,209 +251,98 @@
     const submitBtn  = form.querySelector('button[type="submit"]');
     if (!emailInput || !otpInput || !submitBtn) return;
 
-    // ── Compute DOM anchor (nearest common ancestor of both inputs) ──────────
+    // Repurpose the password field as OTP input
+    otpInput.placeholder = '6-digit code from your email';
+    otpInput.setAttribute('inputmode', 'numeric');
+    otpInput.setAttribute('maxlength', '6');
+    otpInput.setAttribute('autocomplete', 'one-time-code');
+
+    // Status line
+    const status = document.createElement('p');
+    status.id = 'dadi-otp-status';
+    status.style.cssText = 'margin:2px 0 6px;font-size:0.8rem;min-height:1.1em;text-align:center;';
+
+    // Send Code button
+    const sendBtn = document.createElement('button');
+    sendBtn.id = 'dadi-send-code-btn';
+    sendBtn.type = 'button';
+    sendBtn.textContent = 'Send Code';
+    sendBtn.style.cssText = [
+      'width:100%', 'padding:10px', 'background:#8B1A1A', 'color:#fff',
+      'border:none', 'border-radius:8px', 'font-size:0.9rem', 'cursor:pointer',
+      'margin-bottom:4px', 'transition:opacity 0.2s',
+    ].join(';');
+
+    sendBtn.onclick = async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      status.style.color = '#c0392b';
+      if (!email || !email.includes('@') || !email.split('@')[1]?.includes('.')) {
+        status.textContent = 'Enter a valid email address first.';
+        return;
+      }
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = '0.6';
+      sendBtn.textContent = 'Sending…';
+      status.textContent = '';
+      try {
+        const resp = await fetch('/auth/request-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          status.style.color = '#2e7d32';
+          status.textContent = `Code sent to ${email}`;
+          sendBtn.textContent = 'Resend Code';
+          gtag('event', 'otp_code_sent', { method: 'email' });
+          otpInput.value = '';
+          otpInput.focus();
+        } else {
+          status.textContent = data.error || 'Failed to send code.';
+          sendBtn.textContent = 'Send Code';
+        }
+      } catch (_) {
+        status.textContent = 'Network error — please try again.';
+        sendBtn.textContent = 'Send Code';
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+      }
+    };
+
+    // Insert Send Code + status after the email field, before the OTP field.
+    // Walk up from each input to find their branch within the nearest common ancestor.
     function branchUnder(ancestor, el) {
       let node = el;
       while (node && node.parentElement !== ancestor) node = node.parentElement;
       return node;
     }
+    // Find nearest common ancestor of both inputs
     const emailAncestors = new Set();
-    let _n = emailInput;
-    while (_n) { emailAncestors.add(_n); _n = _n.parentElement; }
+    let n = emailInput;
+    while (n) { emailAncestors.add(n); n = n.parentElement; }
     let common = otpInput.parentElement;
     while (common && !emailAncestors.has(common)) common = common.parentElement;
+
     const emailBranch = branchUnder(common || form, emailInput);
-
-    // ── OTP input setup ──────────────────────────────────────────────────────
-    otpInput.setAttribute('inputmode', 'numeric');
-    otpInput.setAttribute('maxlength', '6');
-    otpInput.setAttribute('autocomplete', 'one-time-code');
-
-    // ── Tab bar ──────────────────────────────────────────────────────────────
-    const ACTIVE_TAB_CSS   = 'flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:0.88rem;font-weight:700;color:#8B1A1A;border-bottom:2px solid #8B1A1A;margin-bottom:-2px;transition:all 0.15s;';
-    const INACTIVE_TAB_CSS = 'flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:0.88rem;font-weight:600;color:#9e7a5a;transition:all 0.15s;';
-
-    const tabBar = document.createElement('div');
-    tabBar.style.cssText = 'display:flex;margin-bottom:14px;border-bottom:2px solid #e8d5c5;';
-    const tabEmail = document.createElement('button');
-    tabEmail.type = 'button'; tabEmail.textContent = '✉ Email';
-    tabEmail.style.cssText = ACTIVE_TAB_CSS;
-    const tabPhone = document.createElement('button');
-    tabPhone.type = 'button'; tabPhone.textContent = '📱 Phone';
-    tabPhone.style.cssText = INACTIVE_TAB_CSS;
-    tabBar.appendChild(tabEmail);
-    tabBar.appendChild(tabPhone);
-
-    // ── Phone input ──────────────────────────────────────────────────────────
-    const phoneWrapper = document.createElement('div');
-    phoneWrapper.id = 'dadi-phone-wrapper';
-    phoneWrapper.style.cssText = 'display:none;margin-bottom:6px;';
-    const phoneRow = document.createElement('div');
-    phoneRow.style.cssText = 'display:flex;gap:6px;align-items:stretch;';
-    const countryCode = document.createElement('span');
-    countryCode.textContent = '+91';
-    countryCode.style.cssText = 'display:flex;align-items:center;padding:0 10px;background:#f5ebe0;border:1px solid #e2c9b4;border-radius:6px;font-size:0.9rem;color:#8B1A1A;font-weight:700;white-space:nowrap;';
-    const phoneInput = document.createElement('input');
-    phoneInput.type = 'tel';
-    phoneInput.id = 'dadi-phone-input';
-    phoneInput.placeholder = '10-digit mobile number';
-    phoneInput.setAttribute('inputmode', 'numeric');
-    phoneInput.setAttribute('maxlength', '10');
-    phoneInput.style.cssText = 'flex:1;padding:8px 10px;border:1px solid #e2c9b4;border-radius:6px;font-size:0.9rem;background:#fff;outline:none;color:#333;';
-    phoneRow.appendChild(countryCode);
-    phoneRow.appendChild(phoneInput);
-    phoneWrapper.appendChild(phoneRow);
-
-    // ── Status line ──────────────────────────────────────────────────────────
-    const status = document.createElement('p');
-    status.id = 'dadi-otp-status';
-    status.style.cssText = 'margin:2px 0 6px;font-size:0.8rem;min-height:1.1em;text-align:center;';
-
-    // ── Send Code button ─────────────────────────────────────────────────────
-    const sendBtn = document.createElement('button');
-    sendBtn.id = 'dadi-send-code-btn';
-    sendBtn.type = 'button';
-    sendBtn.textContent = 'Send Code';
-    sendBtn.style.cssText = 'width:100%;padding:10px;background:#8B1A1A;color:#fff;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;margin-bottom:4px;transition:opacity 0.2s;';
-
-    // ── Tab state ────────────────────────────────────────────────────────────
-    let activeTab = 'email';
-
-    function setStatus(msg, ok) {
-      status.style.color = ok ? '#2e7d32' : '#c0392b';
-      status.textContent = msg;
-    }
-    function setSending(on) {
-      sendBtn.disabled = on;
-      sendBtn.style.opacity = on ? '0.6' : '1';
-    }
-
-    function setTab(tab) {
-      activeTab = tab;
-      tabEmail.style.cssText = tab === 'email' ? ACTIVE_TAB_CSS : INACTIVE_TAB_CSS;
-      tabPhone.style.cssText = tab === 'phone' ? ACTIVE_TAB_CSS : INACTIVE_TAB_CSS;
-      if (emailBranch) {
-        emailBranch.style.display = tab === 'email' ? '' : 'none';
-      } else {
-        emailInput.style.display = tab === 'email' ? '' : 'none';
-      }
-      phoneWrapper.style.display = tab === 'phone' ? '' : 'none';
-      otpInput.placeholder = tab === 'email' ? '6-digit code from your email' : '6-digit code from your SMS';
-      setStatus('', null);
-      otpInput.value = '';
-      setTimeout(() => (tab === 'phone' ? phoneInput : emailInput).focus(), 50);
-    }
-
-    tabEmail.onclick = () => setTab('email');
-    tabPhone.onclick = () => setTab('phone');
-
-    // ── Sync phone → Chainlit's email field (React-compatible) ──────────────
-    function syncPhoneToChainlit(phone) {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      if (setter) setter.call(emailInput, phone);
-      else emailInput.value = phone;
-      emailInput.dispatchEvent(new Event('input',  { bubbles: true }));
-      emailInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    // Intercept Sign In click to ensure phone is synced into Chainlit's field
-    submitBtn.addEventListener('click', () => {
-      if (activeTab === 'phone') {
-        const raw = phoneInput.value.trim().replace(/\D/g, '');
-        if (raw.length === 10) syncPhoneToChainlit('+91' + raw);
-      }
-    }, true); // capture phase — fires before React's onClick
-
-    // ── Send Code handler ────────────────────────────────────────────────────
-    sendBtn.onclick = async () => {
-      setStatus('', null);
-      setSending(true);
-      sendBtn.textContent = 'Sending…';
-
-      if (activeTab === 'email') {
-        const email = emailInput.value.trim().toLowerCase();
-        if (!email || !email.includes('@') || !email.split('@')[1]?.includes('.')) {
-          setStatus('Enter a valid email address first.', false);
-          setSending(false); sendBtn.textContent = 'Send Code'; return;
-        }
-        try {
-          const resp = await fetch('/auth/request-otp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-          });
-          const data = await resp.json();
-          if (resp.ok) {
-            setStatus(`Code sent to ${email}`, true);
-            sendBtn.textContent = 'Resend Code';
-            gtag('event', 'otp_code_sent', { method: 'email' });
-            otpInput.value = ''; otpInput.focus();
-          } else {
-            setStatus(data.error || 'Failed to send code.', false);
-            sendBtn.textContent = 'Send Code';
-          }
-        } catch (_) {
-          setStatus('Network error — please try again.', false);
-          sendBtn.textContent = 'Send Code';
-        }
-      } else {
-        // Phone tab
-        const raw = phoneInput.value.trim().replace(/\D/g, '');
-        if (raw.length !== 10) {
-          setStatus('Enter a valid 10-digit mobile number.', false);
-          setSending(false); sendBtn.textContent = 'Send Code'; return;
-        }
-        const phone = '+91' + raw;
-        try {
-          const resp = await fetch('/auth/request-otp-phone', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone }),
-          });
-          const data = await resp.json();
-          if (resp.ok) {
-            setStatus(`Code sent to +91 ${raw.slice(0, 5)} ${raw.slice(5)}`, true);
-            sendBtn.textContent = 'Resend Code';
-            gtag('event', 'otp_code_sent', { method: 'phone' });
-            otpInput.value = ''; otpInput.focus();
-            syncPhoneToChainlit(phone);
-          } else {
-            setStatus(data.error || 'Failed to send SMS.', false);
-            sendBtn.textContent = 'Send Code';
-          }
-        } catch (_) {
-          setStatus('Network error — please try again.', false);
-          sendBtn.textContent = 'Send Code';
-        }
-      }
-      setSending(false);
-    };
-
-    // ── OTP placeholder default ──────────────────────────────────────────────
-    otpInput.placeholder = '6-digit code from your email';
-
-    // ── DOM insertion ────────────────────────────────────────────────────────
     if (emailBranch) {
-      emailBranch.insertAdjacentElement('beforebegin', tabBar);
-      emailBranch.insertAdjacentElement('afterend', phoneWrapper);
-      phoneWrapper.insertAdjacentElement('afterend', sendBtn);
+      emailBranch.insertAdjacentElement('afterend', sendBtn);
       sendBtn.insertAdjacentElement('afterend', status);
     } else {
-      submitBtn.insertAdjacentElement('beforebegin', tabBar);
-      emailInput.insertAdjacentElement('afterend', phoneWrapper);
-      phoneWrapper.insertAdjacentElement('afterend', sendBtn);
-      sendBtn.insertAdjacentElement('afterend', status);
+      submitBtn.insertAdjacentElement('beforebegin', sendBtn);
+      submitBtn.insertAdjacentElement('beforebegin', status);
     }
 
-    // ── GA4: Sign In click ───────────────────────────────────────────────────
-    if (!submitBtn.dataset.gaTracked) {
+    // GA4: track Sign In button click
+    if (submitBtn && !submitBtn.dataset.gaTracked) {
       submitBtn.dataset.gaTracked = '1';
       submitBtn.addEventListener('click', () => {
-        gtag('event', 'login_attempted', { method: activeTab === 'phone' ? 'phone_otp' : 'email_otp' });
+        gtag('event', 'login_attempted', { method: 'otp' });
       });
     }
 
-    // ── Continue as Guest button ─────────────────────────────────────────────
+    // Continue as Guest button
     const guestWrapper = document.createElement('div');
     guestWrapper.id = 'dadi-skip-wrapper';
     guestWrapper.style.cssText = 'display:flex;align-items:center;gap:0.6rem;margin-top:0.85rem;justify-content:center;';
