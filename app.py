@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
 from prompt import DADI_SYSTEM_PROMPT
 from starters import STARTER_SETS
+from calendar_context import get_calendar_context
 import analytics
 
 # ─────────────────────────────────────────────
@@ -718,7 +719,14 @@ async def on_message(message: cl.Message):
         except Exception as e:
             print(f"[RAG] Retrieval error: {e}")
 
-        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context)] + history_msgs + [HumanMessage(content=user_text)]
+        calendar_section = (
+            "\n\n---\nCalendar context (let this colour your responses naturally — "
+            "don't announce the date robotically, but reference the season, festival mood, "
+            "or upcoming occasion the way a real dadi would in conversation):\n"
+            + get_calendar_context()
+        )
+
+        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context + calendar_section)] + history_msgs + [HumanMessage(content=user_text)]
         async for chunk in LLM.astream(llm_msgs):
             full_reply += chunk.content
             await msg.stream_token(chunk.content)
