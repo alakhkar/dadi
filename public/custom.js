@@ -1071,6 +1071,14 @@ function _roundRect(ctx, x, y, w, h, r) {
       if (!bar || _decoratedBars.has(bar)) return;
       if (bar.querySelector('.dadi-share-btn')) { _decoratedBars.add(bar); return; }
 
+      // Skip if bar is inside the input area (shares an ancestor with a textarea)
+      let _el = bar.parentElement;
+      for (let _i = 0; _i < 6; _i++) {
+        if (!_el) break;
+        if (_el.querySelector('textarea, input[type="file"]')) return;
+        _el = _el.parentElement;
+      }
+
       const article = findArticleForBar(bar);
       if (!article || (article.innerText || article.textContent || '').trim().length < 40) return;
 
