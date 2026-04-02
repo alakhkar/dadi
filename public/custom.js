@@ -523,7 +523,7 @@
     const l = document.createElement('link');
     l.rel = 'stylesheet';
     l.setAttribute('data-dadi-share-fonts', '1');
-    l.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap';
+    l.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&family=Anton&display=swap';
     document.head.appendChild(l);
   })();
 
@@ -836,6 +836,195 @@ function _roundRect(ctx, x, y, w, h, r) {
     });
   }
 
+  /* ── Meme generator ── */
+  const _MEME_IMAGES = [
+    '/public/images/dadi.png',
+    '/public/images/dadi_dancing.png',
+    '/public/images/dadi_karate.png',
+    '/public/images/dadi_dancing_with_smirk.png',
+  ];
+
+  async function _generateMeme(text, imgSrc) {
+    await document.fonts.ready;
+    const SIZE = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE; canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+
+    // Draw Dadi image as cover-fill background
+    await fetch(imgSrc).then(r => r.blob()).then(blob => new Promise(resolve => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight);
+        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+        ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = url;
+    })).catch(() => {
+      ctx.fillStyle = '#FDF6F0';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+    });
+
+    // Bottom gradient so text is always readable
+    const grad = ctx.createLinearGradient(0, SIZE * 0.5, 0, SIZE);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.78)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    // Meme text — Anton font, white fill + black stroke (classic meme style)
+    const PAD = 44;
+    const maxW = SIZE - PAD * 2;
+    const memeText = _cleanText(text).toUpperCase();
+
+    let fontSize = 96, lines;
+    while (fontSize >= 40) {
+      ctx.font = `900 ${fontSize}px 'Anton', 'Impact', sans-serif`;
+      lines = _wrapText(ctx, memeText, maxW);
+      if (lines.length <= 4) break;
+      fontSize -= 8;
+    }
+    if (lines.length > 4) {
+      lines = lines.slice(0, 4);
+      lines[3] = lines[3].replace(/\s+\S*$/, '') + '\u2026';
+    }
+
+    const lh = Math.round(fontSize * 1.18);
+    let y = SIZE - PAD - (lines.length - 1) * lh;
+
+    ctx.font = `900 ${fontSize}px 'Anton', 'Impact', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.round(fontSize * 0.09);
+    ctx.strokeStyle = '#000';
+
+    lines.forEach(line => {
+      ctx.strokeText(line, SIZE / 2, y);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(line, SIZE / 2, y);
+      y += lh;
+    });
+
+    // Watermark top-right
+    ctx.font = `400 26px 'Space Mono', monospace`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillStyle = '#FF4D00';
+    ctx.textAlign = 'right';
+    ctx.strokeText('MYDADI.IN', SIZE - 20, 44);
+    ctx.fillText('MYDADI.IN', SIZE - 20, 44);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function showMemeModal(rawDadiText) {
+    document.getElementById('dadi-meme-modal')?.remove();
+    const text = _cleanText(rawDadiText);
+    let currentIdx = Math.floor(Math.random() * _MEME_IMAGES.length);
+    let _memeDataUrl = null;
+
+    const modal = document.createElement('div');
+    modal.className = 'dadi-share-modal';
+    modal.id = 'dadi-meme-modal';
+    modal.innerHTML = `
+      <div class="dadi-share-box">
+        <div class="dadi-share-header">
+          <span class="dadi-share-title">😂 Dadi Meme</span>
+          <button class="dadi-share-x" id="dm-close">✕</button>
+        </div>
+        <div class="dadi-share-generating" id="dm-generating">Generating meme…</div>
+        <div class="dadi-share-img-wrap" id="dm-img-wrap" style="display:none"></div>
+        <div id="dm-picker" style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;"></div>
+        <div class="dadi-share-grid" id="dm-btns" style="display:none">
+          ${navigator.canShare ? '<button class="dadi-share-opt primary dadi-share-grid-wide" id="dm-native">⬆️ Share Meme…</button>' : ''}
+          <button class="dadi-share-opt primary dadi-share-grid-wide" id="dm-dl">⬇ Download Meme</button>
+          <button class="dadi-share-opt" id="dm-copy">📋 Copy Image</button>
+          <button class="dadi-share-opt" id="dm-wa">💬 WhatsApp</button>
+        </div>
+        <div class="dadi-share-status" id="dm-status"></div>
+      </div>`;
+
+    document.body.appendChild(modal);
+
+    // Image picker thumbnails
+    const picker = modal.querySelector('#dm-picker');
+    _MEME_IMAGES.forEach((src, i) => {
+      const thumb = document.createElement('img');
+      thumb.src = src;
+      thumb.title = 'Switch Dadi';
+      thumb.style.cssText = `width:46px;height:46px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid ${i === currentIdx ? '#8B1A1A' : 'transparent'};transition:border 0.15s;`;
+      thumb.onclick = () => {
+        currentIdx = i;
+        picker.querySelectorAll('img').forEach((t, j) => { t.style.borderColor = j === i ? '#8B1A1A' : 'transparent'; });
+        generate();
+      };
+      picker.appendChild(thumb);
+    });
+
+    const setStatus = (msg, ok) => {
+      const el = modal.querySelector('#dm-status');
+      el.textContent = msg;
+      el.style.color = ok === false ? '#c0392b' : '#2e7d32';
+    };
+
+    async function generate() {
+      const wrap = modal.querySelector('#dm-img-wrap');
+      const gen  = modal.querySelector('#dm-generating');
+      const btns = modal.querySelector('#dm-btns');
+      wrap.style.display = 'none'; btns.style.display = 'none';
+      gen.style.display = 'flex'; gen.textContent = 'Generating meme…';
+      try {
+        _memeDataUrl = await _generateMeme(text, _MEME_IMAGES[currentIdx]);
+        const img = document.createElement('img');
+        img.src = _memeDataUrl; img.alt = 'Dadi meme';
+        wrap.innerHTML = ''; wrap.appendChild(img);
+        gen.style.display = 'none';
+        wrap.style.display = 'block';
+        btns.style.display = 'grid';
+      } catch (_) { gen.textContent = 'Could not generate meme.'; }
+    }
+
+    modal.querySelector('#dm-close').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelector('#dm-native')?.addEventListener('click', async () => {
+      if (!_memeDataUrl) return;
+      try {
+        const blob = await (await fetch(_memeDataUrl)).blob();
+        const file = new File([blob], 'dadi-meme.png', { type: 'image/png' });
+        await navigator.share(navigator.canShare({ files: [file] }) ? { files: [file], title: 'Dadi Meme', url: 'https://www.mydadi.in' } : { title: 'Dadi Meme', url: 'https://www.mydadi.in' });
+      } catch (_) {}
+    });
+
+    modal.querySelector('#dm-dl').addEventListener('click', () => {
+      if (!_memeDataUrl) return;
+      const a = document.createElement('a');
+      a.href = _memeDataUrl; a.download = 'dadi-meme.png'; a.click();
+      gtag('event', 'meme_action', { action: 'download' });
+    });
+
+    modal.querySelector('#dm-copy').addEventListener('click', async () => {
+      if (!_memeDataUrl) return;
+      try {
+        const blob = await (await fetch(_memeDataUrl)).blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setStatus('✓ Copied to clipboard!');
+        gtag('event', 'meme_action', { action: 'copy' });
+      } catch (_) { setStatus('Copy not supported on this browser.', false); }
+    });
+
+    modal.querySelector('#dm-wa').addEventListener('click', () => {
+      window.open('https://wa.me/?text=' + encodeURIComponent('😂 Chat with Dadi at https://www.mydadi.in'), '_blank');
+      gtag('event', 'meme_action', { action: 'whatsapp' });
+    });
+
+    setTimeout(generate, 30);
+  }
+
   function findUserMessageForArticle(dadiArticle) {
     const all = Array.from(document.querySelectorAll('[role="article"]'));
     const idx = all.indexOf(dadiArticle);
@@ -877,7 +1066,7 @@ function _roundRect(ctx, x, y, w, h, r) {
     if (isLoginPage()) return;
 
     // Find every .h-9 action button, resolve its outer bar, inject once per bar
-    document.querySelectorAll('button.h-9:not(.dadi-share-btn)').forEach(btn => {
+    document.querySelectorAll('button.h-9:not(.dadi-share-btn):not(.dadi-meme-btn)').forEach(btn => {
       const bar = getOuterActionBar(btn);
       if (!bar || _decoratedBars.has(bar)) return;
       if (bar.querySelector('.dadi-share-btn')) { _decoratedBars.add(bar); return; }
@@ -887,10 +1076,13 @@ function _roundRect(ctx, x, y, w, h, r) {
 
       _decoratedBars.add(bar);
 
-      const existingBtn = bar.querySelector('button.h-9:not(.dadi-share-btn)');
-      const svgCls = existingBtn?.querySelector('svg')?.getAttribute('class') || 'lucide h-4 w-4';
+      const existingBtn = bar.querySelector('button.h-9:not(.dadi-share-btn):not(.dadi-meme-btn)');
+      const btnCls  = existingBtn ? existingBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
+      const svgCls  = existingBtn?.querySelector('svg')?.getAttribute('class') || 'lucide h-4 w-4';
+
+      // Share button
       const shareBtn = document.createElement('button');
-      shareBtn.className = (existingBtn ? existingBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ') + 'dadi-share-btn';
+      shareBtn.className = btnCls + 'dadi-share-btn';
       shareBtn.title = 'Share as image';
       shareBtn.innerHTML =
         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${svgCls}">` +
@@ -900,10 +1092,27 @@ function _roundRect(ctx, x, y, w, h, r) {
       shareBtn.onclick = e => {
         e.stopPropagation();
         const dadiText = (article.innerText || article.textContent || '').trim();
-        const userText = findUserMessageForArticle(article);
-        showShareModal(dadiText, userText);
+        showShareModal(dadiText, findUserMessageForArticle(article));
       };
+
+      // Meme button
+      const memeBtn = document.createElement('button');
+      memeBtn.className = btnCls + 'dadi-meme-btn';
+      memeBtn.title = 'Make a meme';
+      memeBtn.innerHTML =
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${svgCls}">` +
+          '<circle cx="12" cy="12" r="10"/>' +
+          '<path d="M8 13s1.5 2 4 2 4-2 4-2"/>' +
+          '<line x1="9" y1="9" x2="9.01" y2="9"/>' +
+          '<line x1="15" y1="9" x2="15.01" y2="9"/>' +
+        '</svg>';
+      memeBtn.onclick = e => {
+        e.stopPropagation();
+        showMemeModal((article.innerText || article.textContent || '').trim());
+      };
+
       bar.appendChild(shareBtn);
+      bar.appendChild(memeBtn);
     });
   }
 
