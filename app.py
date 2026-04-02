@@ -30,9 +30,8 @@ SUPABASE_KEY          = os.environ["SUPABASE_KEY"]
 DATABASE_URL          = os.environ["DATABASE_URL"]
 RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
 EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.dev>")
-TWILIO_ACCOUNT_SID    = os.environ.get("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN     = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_PHONE_FROM     = os.environ.get("TWILIO_PHONE_FROM")
+MSG91_API_KEY         = os.environ.get("MSG91_API_KEY")
+MSG91_TEMPLATE_ID     = os.environ.get("MSG91_TEMPLATE_ID")
 ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
@@ -378,22 +377,24 @@ def _verify_otp_phone_sync(phone: str, code: str) -> bool:
         return False
 
 async def _send_otp_sms(phone: str, code: str) -> bool:
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_FROM:
-        print(f"[OTP-SMS] No Twilio credentials — code for {phone}: {code}")
+    if not MSG91_API_KEY or not MSG91_TEMPLATE_ID:
+        print(f"[OTP-SMS] No MSG91 credentials — code for {phone}: {code}")
         return True
+    # MSG91 expects mobile without leading +, e.g. 919876543210
+    mobile = phone.lstrip('+')
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json",
-            auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-            data={
-                "From": TWILIO_PHONE_FROM,
-                "To": phone,
-                "Body": f"Your Dadi verification code is: {code}\n\nExpires in 10 minutes. Do not share this code.",
-            },
+            "https://api.msg91.com/api/v5/otp",
+            params={"template_id": MSG91_TEMPLATE_ID, "mobile": mobile, "otp": code},
+            headers={"authkey": MSG91_API_KEY, "Content-Type": "application/json"},
             timeout=15,
         )
     if r.status_code not in (200, 201):
-        print(f"[OTP-SMS] Twilio error: {r.text}")
+        print(f"[OTP-SMS] MSG91 error: {r.text}")
+        return False
+    resp_json = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    if resp_json.get("type") == "error":
+        print(f"[OTP-SMS] MSG91 error: {resp_json}")
         return False
     return True
 
