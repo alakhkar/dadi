@@ -31,3 +31,11 @@ button[aria-label="Readme"],
 button[aria-label="readme"] {
   display: none !important;
 }
+
+/* Hide Chainlit's built-in share buttons (top-right header + input area) */
+button[aria-label="Share"],
+button[aria-label="share"],
+a[href*="/share"],
+[data-testid="share-button"] {
+  display: none !important;
+}

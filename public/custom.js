@@ -853,7 +853,7 @@ function _roundRect(ctx, x, y, w, h, r) {
       if (el.classList && el.classList.contains('-ml-1.5')) return el;
       el = el.parentElement;
     }
-    return btn.parentElement; // fallback
+    return null; // only inject into proper message action bars
   }
 
   // From the action bar, find the associated article by walking up and checking siblings
