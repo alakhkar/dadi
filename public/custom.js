@@ -842,6 +842,10 @@ function _roundRect(ctx, x, y, w, h, r) {
     '/public/images/dadi_dancing.png',
     '/public/images/dadi_karate.png',
     '/public/images/dadi_dancing_with_smirk.png',
+    '/public/images/dadi kicking with smirk.png',
+    '/public/images/dadi picking flowers.png',
+    '/public/images/dadi reading book.png',
+    '/public/images/dadi tea.png',
   ];
 
   async function _generateMeme(text, imgSrc) {
