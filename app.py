@@ -76,12 +76,12 @@ elif LLM_PROVIDER == "deepseek":
     print("[LLM] Using DeepSeek-V3 via HuggingFace router (novita)")
 else:
     LLM = ChatGroq(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="llama-3.3-70b-versatile",
         api_key=GROQ_API_KEY,
         temperature=0.8,
         streaming=True,
     )
-    print("[LLM] Using Groq (llama-4-scout-17b-16e-instruct)")
+    print("[LLM] Using Groq (llama-3.3-70b-versatile)")
 
 # ─────────────────────────────────────────────
 # 4. SUPABASE REST HELPERS
