@@ -349,11 +349,34 @@
     }
   }
 
+  function injectProfileButton() {
+    if (document.getElementById('dadi-profile-btn')) return;
+    const header = document.querySelector('#header') || document.querySelector('header');
+    if (!header) return;
+    const btn = document.createElement('a');
+    btn.id = 'dadi-profile-btn';
+    btn.href = '/profile';
+    btn.target = '_blank';
+    btn.rel = 'noopener';
+    btn.textContent = 'Meri Profile';
+    btn.style.cssText = (
+      'font-size:0.72rem;color:#8B1A1A;text-decoration:none;' +
+      'border:1px solid rgba(139,26,26,0.35);border-radius:999px;' +
+      'padding:3px 12px;opacity:0.85;white-space:nowrap;' +
+      'transition:opacity 0.2s,background 0.2s;'
+    );
+    btn.onmouseenter = () => { btn.style.background = 'rgba(139,26,26,0.07)'; btn.style.opacity = '1'; };
+    btn.onmouseleave = () => { btn.style.background = ''; btn.style.opacity = '0.85'; };
+    header.style.position = 'relative';
+    header.appendChild(btn);
+  }
+
   function fadeOverlay() {
     overlay.style.transition = 'opacity 0.3s';
     overlay.style.opacity = '0';
     setTimeout(() => overlay.remove(), 350);
     trackChatEngagement();
+    injectProfileButton();
   }
 
   const overlayObs = new MutationObserver(() => {

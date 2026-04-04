@@ -16,7 +16,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
-from prompt import DADI_SYSTEM_PROMPT, STORY_CHAPTER_ADDON
+from prompt import DADI_SYSTEM_PROMPT, STORY_CHAPTER_ADDON, ONBOARDING_ADDON
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from starters import STARTER_SETS
 from calendar_context import get_calendar_context
 import analytics
@@ -38,6 +39,8 @@ LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq"
 NOVITA_API_KEY        = os.environ.get("NOVITA_API_KEY", "")
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
+
+_scheduler = AsyncIOScheduler(timezone="UTC")
 
 # ─────────────────────────────────────────────
 # 2. CHAINLIT DATA LAYER
@@ -397,6 +400,98 @@ async def _extract_and_save_memories(email: str, messages: list) -> int:
     return saved
 
 # ─────────────────────────────────────────────
+# 5b. USER PREFERENCES (daily email opt-in)
+# ─────────────────────────────────────────────
+async def _get_daily_optin(email: str) -> bool:
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/user_preferences?user_email=eq.{email}&select=daily_optin",
+                headers=SUPA_HEADERS, timeout=10,
+            )
+        rows = r.json()
+        return bool(rows[0]["daily_optin"]) if rows else False
+    except Exception:
+        return False
+
+async def _set_daily_optin(email: str, value: bool):
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/user_preferences",
+                headers={**SUPA_HEADERS, "Prefer": "resolution=merge-duplicates"},
+                json={
+                    "user_email": email,
+                    "daily_optin": value,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                timeout=10,
+            )
+    except Exception as e:
+        print(f"[Prefs] Save error: {e}")
+
+async def _get_all_daily_optin_emails() -> list:
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/user_preferences?daily_optin=eq.true&select=user_email",
+                headers=SUPA_HEADERS, timeout=15,
+            )
+        return [row["user_email"] for row in r.json()]
+    except Exception as e:
+        print(f"[Daily] Failed to fetch opted-in users: {e}")
+        return []
+
+async def _send_daily_dadi_email(email: str, content: str):
+    if not RESEND_API_KEY:
+        return
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "from": EMAIL_FROM,
+                "to": [email],
+                "subject": "☀️ Dadi ka subah ka sandesh",
+                "html": (
+                    '<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;'
+                    'padding:24px;background:#FDF6F0;border-radius:12px;">'
+                    '<p style="font-size:0.8rem;color:#9e7a5a;letter-spacing:0.1em;'
+                    'text-transform:uppercase;margin-bottom:16px;">Dadi AI — Subah ka Sandesh</p>'
+                    f'<p style="font-size:1.1rem;color:#2d1a10;line-height:1.7;">{content}</p>'
+                    '<hr style="border:none;border-top:1px solid #f0d9c8;margin:24px 0;">'
+                    '<p style="font-size:0.78rem;color:#9e7a5a;">'
+                    'Aana kabhi — <a href="https://www.mydadi.in" style="color:#8B1A1A;">mydadi.in</a> pe intezaar hai.<br>'
+                    '<a href="https://www.mydadi.in/profile" style="color:#9e7a5a;font-size:0.72rem;">'
+                    'Emails band karne ke liye profile visit karo</a></p></div>'
+                ),
+            },
+            timeout=15,
+        )
+
+async def _run_daily_dadi_emails():
+    print("[Daily] Generating daily message...")
+    cal = get_calendar_context()
+    prompt = (
+        "Write one short morning message (3-4 sentences) as Dadi — Pushpa Devi Sharma, 68, Jaipur. "
+        "Hinglish voice. Could be a seasonal blessing, a proverb with a warm twist, or a gentle observation. "
+        "Today's context:\n" + cal + "\nNo greeting opener like 'Good morning'. Just the message itself."
+    )
+    try:
+        response = await LLM.ainvoke([HumanMessage(content=prompt)])
+        content = response.content.strip()
+    except Exception as e:
+        print(f"[Daily] LLM error: {e}")
+        return
+    emails = await _get_all_daily_optin_emails()
+    print(f"[Daily] Sending to {len(emails)} users")
+    for email in emails:
+        try:
+            await _send_daily_dadi_email(email, content)
+        except Exception as e:
+            print(f"[Daily] Failed for {email}: {e}")
+
+# ─────────────────────────────────────────────
 # 6. RAG — ENSURE PDF UPLOADED ON STARTUP
 # ─────────────────────────────────────────────
 def ensure_knowledge_uploaded():
@@ -622,9 +717,136 @@ try:
 
     _cl_app.add_middleware(_AnalyticsMiddleware)
 
+    # ── Profile page ──────────────────────────────────────────────────────────
+    _PROFILE_PAGE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meri Profile — Dadi AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Kalam:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:#FDF6F0;color:#2d1a10;min-height:100vh;padding:24px 16px}
+  .wrap{max-width:520px;margin:0 auto}
+  .logo{font-family:'Playfair Display',serif;color:#8B1A1A;font-size:1.4rem;text-align:center;margin-bottom:4px}
+  .tagline{text-align:center;font-size:0.75rem;color:#9e7a5a;letter-spacing:.12em;text-transform:uppercase;margin-bottom:28px}
+  .card{background:#fff;border:1px solid #f0d9c8;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 4px 20px rgba(139,26,26,.06)}
+  .card h2{font-family:'Playfair Display',serif;color:#8B1A1A;font-size:1.1rem;margin-bottom:14px}
+  .field{margin-bottom:14px}
+  label{display:block;font-size:0.78rem;color:#9e7a5a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+  input[type=email]{width:100%;padding:0.65rem 0.9rem;border:1px solid #f0d9c8;border-radius:8px;font-size:0.95rem;outline:none;transition:border-color .2s}
+  input[type=email]:focus{border-color:#8B1A1A}
+  button[type=submit]{width:100%;padding:0.7rem;background:linear-gradient(135deg,#8B1A1A,#c0392b);color:#fff;border:none;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;margin-top:4px}
+  .error{color:#c0392b;font-size:0.82rem;margin-top:10px;text-align:center}
+  .memory-list{list-style:none;padding:0}
+  .memory-list li{padding:8px 12px;background:#FDF6F0;border-radius:8px;margin-bottom:6px;font-size:0.9rem;color:#2d1a10;border-left:3px solid #8B1A1A}
+  .stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0d9c8;font-size:0.9rem}
+  .stat-row:last-child{border-bottom:none}
+  .stat-val{font-weight:600;color:#8B1A1A}
+  .toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.9rem}
+  .toggle-label input[type=checkbox]{width:18px;height:18px;accent-color:#8B1A1A;cursor:pointer}
+  .back{display:block;text-align:center;margin-top:20px;font-size:0.8rem;color:#9e7a5a;text-decoration:none}
+  .back:hover{color:#8B1A1A}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">Dadi AI</div>
+  <div class="tagline">She will roast you. She will fix you.</div>
+  <div class="card">
+    <h2>Meri Profile</h2>
+    <form method="POST" action="/profile">
+      <div class="field">
+        <label for="email">Apna email daalo</label>
+        <input type="email" id="email" name="email" placeholder="beta@example.com" autofocus required>
+      </div>
+      <button type="submit">Dekho kya yaad hai Dadi ko</button>
+      {error_html}
+    </form>
+  </div>
+  {profile_html}
+  <a href="/" class="back">← Wapas Dadi ke paas</a>
+</div>
+</body>
+</html>"""
+
+    @_cl_app.get("/profile")
+    async def profile_get(request: Request):
+        email_param = request.query_params.get("email", "")
+        if email_param:
+            return await _render_profile(email_param)
+        return _HTMLResponse(_PROFILE_PAGE_HTML.replace("{error_html}", "").replace("{profile_html}", ""))
+
+    @_cl_app.post("/profile")
+    async def profile_post(request: Request):
+        form = await request.form()
+        email = (form.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return _HTMLResponse(
+                _PROFILE_PAGE_HTML.replace("{error_html}", '<p class="error">Valid email daalo beta.</p>').replace("{profile_html}", "")
+            )
+        return await _render_profile(email)
+
+    async def _render_profile(email: str):
+        memories = await _get_memories(email)
+        optin = await _get_daily_optin(email)
+        total_sessions = 0
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/analytics_events?user_email=eq.{email}&event_name=eq.session_start&select=id",
+                    headers=SUPA_HEADERS, timeout=10,
+                )
+                if r.status_code == 200:
+                    total_sessions = len(r.json())
+        except Exception:
+            pass
+
+        memories_html = (
+            "".join(f'<li>{m}</li>' for m in memories)
+            if memories else
+            "<li style='color:#9e7a5a;border-left-color:#f0d9c8;'>Abhi kuch yaad nahi — aaja baat kar!</li>"
+        )
+        optin_checked = "checked" if optin else ""
+        profile_html = f"""
+        <div class="card">
+          <h2>Dadi ko yaad hai…</h2>
+          <ul class="memory-list">{memories_html}</ul>
+        </div>
+        <div class="card">
+          <h2>Teri stats</h2>
+          <div class="stat-row"><span>Total sessions</span><span class="stat-val">{total_sessions}</span></div>
+          <div class="stat-row"><span>Memories saved</span><span class="stat-val">{len(memories)}</span></div>
+        </div>
+        <div class="card">
+          <h2>Roz subah ka sandesh ☀️</h2>
+          <form method="POST" action="/toggle-daily-email">
+            <input type="hidden" name="email" value="{email}">
+            <label class="toggle-label">
+              <input type="checkbox" name="daily_optin" {optin_checked} onchange="this.form.submit()">
+              Dadi ka roz subah email bhejo
+            </label>
+          </form>
+        </div>"""
+        return _HTMLResponse(
+            _PROFILE_PAGE_HTML.replace("{error_html}", "").replace("{profile_html}", profile_html)
+        )
+
+    @_cl_app.post("/toggle-daily-email")
+    async def toggle_daily_email(request: Request):
+        from starlette.responses import RedirectResponse
+        form = await request.form()
+        email = (form.get("email") or "").strip().lower()
+        value = form.get("daily_optin") == "on"
+        if email:
+            await _set_daily_optin(email, value)
+        return RedirectResponse(url=f"/profile?email={email}", status_code=303)
+
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
     print("[Analytics] Dashboard middleware registered at GET/POST /auth/analytics ✓")
+    print("[Profile] Profile page registered at GET/POST /profile ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
@@ -735,6 +957,12 @@ async def set_starters():
 # ─────────────────────────────────────────────
 @cl.on_chat_start
 async def on_start():
+    # Start daily scheduler once
+    if not _scheduler.running:
+        _scheduler.add_job(_run_daily_dadi_emails, "cron", hour=1, minute=30)  # 7 AM IST
+        _scheduler.start()
+        print("[Scheduler] Daily Dadi emails scheduled at 07:00 IST ✓")
+
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
     cl.user_session.set("story_chapters", [])
@@ -749,12 +977,32 @@ async def on_start():
     cl.user_session.set("memories", memories)
     cl.user_session.set("session_started_at", datetime.now(timezone.utc))
 
+    is_first_time = not is_guest and len(memories) == 0
+    cl.user_session.set("is_first_time", is_first_time)
+
     await analytics.log_session_start(
         session_id=cl.context.session.id,
         user_email=email,
         user_type="guest" if is_guest else "registered",
         memory_count=len(memories),
     )
+
+    if is_first_time:
+        await cl.Message(
+            content=(
+                "Arre, naaya chehra! 👀 Aaja beta, baith ja.\n\n"
+                "Main hoon Pushpa Devi Sharma — sab Dadi bolte hain. "
+                "Bata, kya naam hai tera? Aur kya chal raha hai zindagi mein?"
+            ),
+            author="Dadi 👵🏾",
+            actions=[
+                cl.Action(
+                    name="daily_optin",
+                    value="yes",
+                    label="📩 Haan Dadi, roz subah message bhejo!",
+                )
+            ],
+        ).send()
 
 
 @cl.on_message
@@ -815,7 +1063,12 @@ async def on_message(message: cl.Message):
             + get_calendar_context()
         )
 
-        base_system = DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context + calendar_section
+        is_first_time = cl.user_session.get("is_first_time", False)
+        onboarding_addon = ONBOARDING_ADDON if is_first_time and len(messages) <= 2 else ""
+        if is_first_time:
+            cl.user_session.set("is_first_time", False)
+
+        base_system = DADI_SYSTEM_PROMPT + onboarding_addon + memory_section + rag_context + search_context + cricket_context + calendar_section
 
         if _is_story_request(user_text):
             # ── Story mode: generate all 3 chapters in one call, deliver one at a time ──
@@ -910,6 +1163,27 @@ async def on_next_chapter(action: cl.Action):
         )
 
     await msg.send()
+    await action.remove()
+
+
+@cl.action_callback("daily_optin")
+async def on_daily_optin(action: cl.Action):
+    email = cl.user_session.get("email")
+    if not email:
+        await cl.Message(
+            content="Beta, pehle login kar — tab main roz message karungi! 😄",
+            author="Dadi 👵🏾",
+        ).send()
+        await action.remove()
+        return
+    await _set_daily_optin(email, True)
+    await cl.Message(
+        content=(
+            "Theek hai beta! Kal se roz subah 7 baje tera Dadi ka sandesh aa jayega. ☀️\n\n"
+            "Aur agar kabhi band karna ho toh [profile pe aa jaana](/profile)."
+        ),
+        author="Dadi 👵🏾",
+    ).send()
     await action.remove()
 
 
