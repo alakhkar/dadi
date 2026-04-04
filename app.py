@@ -34,7 +34,8 @@ EMAIL_FROM            = os.environ.get("EMAIL_FROM", "Dadi <onboarding@resend.de
 ANALYTICS_ADMIN_TOKEN    = os.environ.get("ANALYTICS_ADMIN_TOKEN", "")
 ANALYTICS_ADMIN_EMAIL    = os.environ.get("ANALYTICS_ADMIN_EMAIL", "")
 ANALYTICS_ADMIN_PASSWORD = os.environ.get("ANALYTICS_ADMIN_PASSWORD", "")
-LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq" or "deepseek"
+LLM_PROVIDER          = os.environ.get("LLM_PROVIDER", "groq").lower()  # "groq", "deepseek", or "novita"
+NOVITA_API_KEY        = os.environ.get("NOVITA_API_KEY", "")
 
 analytics.init(SUPABASE_URL, SUPABASE_KEY)
 
@@ -53,7 +54,17 @@ EMBEDDINGS = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
 )
 
-if LLM_PROVIDER == "deepseek":
+if LLM_PROVIDER == "novita":
+    from langchain_openai import ChatOpenAI
+    LLM = ChatOpenAI(
+        model="deepseek/deepseek-v3-0324",
+        api_key=NOVITA_API_KEY,
+        base_url="https://api.novita.ai/v3/openai",
+        temperature=0.8,
+        streaming=True,
+    )
+    print("[LLM] Using DeepSeek-V3 via Novita directly")
+elif LLM_PROVIDER == "deepseek":
     from langchain_openai import ChatOpenAI
     LLM = ChatOpenAI(
         model="deepseek-ai/DeepSeek-V3:novita",
