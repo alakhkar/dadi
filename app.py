@@ -12,7 +12,7 @@ load_dotenv()
 import httpx
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
@@ -49,9 +49,8 @@ def get_data_layer():
 # 3. EMBEDDINGS + LLM
 # ─────────────────────────────────────────────
 print("[Startup] Loading embeddings model...")
-EMBEDDINGS = HuggingFaceEndpointEmbeddings(
-    model="sentence-transformers/all-MiniLM-L6-v2",
-    huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+EMBEDDINGS = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
 )
 
 if LLM_PROVIDER == "deepseek":
