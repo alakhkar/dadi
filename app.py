@@ -16,7 +16,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
-from prompt import DADI_SYSTEM_PROMPT
+from prompt import DADI_SYSTEM_PROMPT, STORY_CHAPTER_ADDON
 from starters import STARTER_SETS
 from calendar_context import get_calendar_context
 import analytics
@@ -146,6 +146,16 @@ _CRICKET_KEYWORDS = {
 def _is_cricket_query(text: str) -> bool:
     lower = text.lower()
     return any(kw in lower for kw in _CRICKET_KEYWORDS)
+
+_STORY_KEYWORDS = [
+    "kahani", "kahaani", "story", "sunao", "suna do", "kissa",
+    "ramayana", "mahabharata", "panchatantra", "lok katha", "folk tale",
+    "baat batao", "koi baat", "apne zamane", "purani baat",
+]
+
+def _is_story_request(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in _STORY_KEYWORDS)
 
 async def _get_cricket_context() -> str:
     """Fetch live matches + IPL points table from CricAPI. Cached for 120s."""
@@ -727,6 +737,8 @@ async def set_starters():
 async def on_start():
     cl.user_session.set("messages", [])
     cl.user_session.set("response_count", 0)
+    cl.user_session.set("story_chapters", [])
+    cl.user_session.set("story_chapter_idx", 0)
 
     user = cl.context.session.user
     is_guest = user.metadata.get("role") == "guest"
@@ -803,10 +815,34 @@ async def on_message(message: cl.Message):
             + get_calendar_context()
         )
 
-        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context + calendar_section)] + history_msgs + [HumanMessage(content=user_text)]
-        async for chunk in LLM.astream(llm_msgs):
-            full_reply += chunk.content
-            await msg.stream_token(chunk.content)
+        base_system = DADI_SYSTEM_PROMPT + memory_section + rag_context + search_context + cricket_context + calendar_section
+
+        if _is_story_request(user_text):
+            # ── Story mode: generate all 3 chapters in one call, deliver one at a time ──
+            story_system = base_system + STORY_CHAPTER_ADDON
+            llm_msgs = [SystemMessage(content=story_system)] + history_msgs + [HumanMessage(content=user_text)]
+
+            # Collect full response (no streaming — must split before displaying)
+            async for chunk in LLM.astream(llm_msgs):
+                full_reply += chunk.content
+
+            raw_chapters = [c.strip() for c in full_reply.split("<<<CHAPTER>>>") if c.strip()]
+            while len(raw_chapters) < 3:
+                raw_chapters.append("")
+            chapters = raw_chapters[:3]
+
+            cl.user_session.set("story_chapters", chapters)
+            cl.user_session.set("story_chapter_idx", 1)
+
+            # Reuse msg — set content and Next Chapter action button
+            msg.content = f"**📖 Kahani — Bhaag 1/3**\n\n{chapters[0]}"
+            msg.actions = [cl.Action(name="next_chapter", value="next", label="📖 Aage sunao, Dadi →")]
+
+        else:
+            llm_msgs = [SystemMessage(content=base_system)] + history_msgs + [HumanMessage(content=user_text)]
+            async for chunk in LLM.astream(llm_msgs):
+                full_reply += chunk.content
+                await msg.stream_token(chunk.content)
 
     except Exception as e:
         full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
@@ -844,6 +880,37 @@ async def on_message(message: cl.Message):
             facts_count=facts_saved,
             trigger="periodic",
         )
+
+
+@cl.action_callback("next_chapter")
+async def on_next_chapter(action: cl.Action):
+    chapters = cl.user_session.get("story_chapters", [])
+    idx = cl.user_session.get("story_chapter_idx", 1)
+
+    if idx >= len(chapters) or not chapters[idx]:
+        await cl.Message(content="Bas, yahi tha beta. Kahani khatam. 🙏", author="Dadi 👵🏾").send()
+        await action.remove()
+        return
+
+    chapter_text = chapters[idx]
+    chapter_num = idx + 1
+    cl.user_session.set("story_chapter_idx", idx + 1)
+    is_last = (idx == 2)
+
+    if is_last:
+        msg = cl.Message(
+            content=f"**📖 Kahani — Bhaag {chapter_num}/3**\n\n{chapter_text}\n\n*— Aur yahi thi Dadi ki kahani. Ab ja, chai pi. 🍵*",
+            author="Dadi 👵🏾",
+        )
+    else:
+        msg = cl.Message(
+            content=f"**📖 Kahani — Bhaag {chapter_num}/3**\n\n{chapter_text}",
+            author="Dadi 👵🏾",
+            actions=[cl.Action(name="next_chapter", value="next", label="📖 Aage sunao, Dadi →")],
+        )
+
+    await msg.send()
+    await action.remove()
 
 
 @cl.on_chat_end

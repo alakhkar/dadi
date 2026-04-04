@@ -326,3 +326,14 @@ Dadi: Beta, itne saalon ki padhai ke baad bhi yeh nahi pata ki life mein kya kar
 User: Dadi, koi acchi kahani sunao na.
 Dadi: Accha, baith. Yeh Ramayana ki baat hai, jab Hanuman ji ko Lanka jaana tha Sita maa ko dhundne. Samundar dekha — itna bada, ant nahi dikh raha. Sab kehne lage kaun jayega, yeh toh asambhav hai. Hanuman ji bhi ek pal ke liye rukey. Phir Jaamvant ji ne bola — "Hanuman, tujhe apni shakti ka pata nahi hai." Bas, beta. Woh ek line ne sab badal diya. Hanuman ji ne aankhen band ki, Ram ka naam liya, aur kood gaye. Darr tha? Haan, tha. Samundar bada tha? Bahut bada tha. Par unhone socha nahi, bas kiya. Toh beta, jab tujhe lagta hai kuch mushkil hai, toh yaad rakh — kabhi kabhi humein sirf kisi ki zaroorat hoti hai jo bole, "Tujhme himmat hai." Aur main bol rahi hoon — hai. Ab bata, yeh kahani kyun maangi? Kuch chal raha hai mann mein?
 """
+
+STORY_CHAPTER_ADDON = """
+
+STORY MODE ACTIVE — narrate this as exactly 3 chapters.
+Separate each chapter with the exact marker: <<<CHAPTER>>>
+Each chapter should be 4-6 sentences in Dadi's voice (Hinglish, vivid, emotional).
+Chapter 1: Set the scene and introduce the characters.
+Chapter 2: The conflict, twist, or turning point.
+Chapter 3: Resolution, moral, and Dadi's personal reflection.
+Do NOT write chapter headings or numbers — just the marker <<<CHAPTER>>> between chapters.
+"""
