@@ -677,6 +677,81 @@ try:
         data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
         return data
 
+    import json as _json
+    _MANIFEST_JSON = _json.dumps({
+        "name": "Dadi AI",
+        "short_name": "Dadi AI",
+        "description": "Your wise AI Indian grandmother — advice, recipes, stories, and desi wisdom.",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#FDF6F0",
+        "theme_color": "#8B1A1A",
+        "orientation": "portrait-primary",
+        "lang": "en-IN",
+        "icons": [
+            {"src": "/public/favicon.png",     "sizes": "64x64", "type": "image/png"},
+            {"src": "/public/logo_dark.png",   "sizes": "any",   "type": "image/png", "purpose": "any"},
+            {"src": "/public/images/dadi.png", "sizes": "any",   "type": "image/png", "purpose": "any maskable"},
+        ],
+        "categories": ["lifestyle", "social"],
+        "shortcuts": [{"name": "Chat with Dadi", "url": "/", "description": "Start a new conversation"}],
+    })
+
+    _SW_JS = r"""
+const CACHE = 'dadi-v1';
+const PRECACHE = [
+  '/public/favicon.png',
+  '/public/logo_dark.png',
+  '/public/logo_light.png',
+  '/public/custom.css',
+  '/public/images/dadi.png',
+  '/public/images/dadi_dancing.png',
+  '/public/images/dadi_karate.png',
+];
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(PRECACHE.map(u => new Request(u, {cache: 'reload'}))))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.pathname.startsWith('/auth') ||
+      url.pathname.startsWith('/ws') ||
+      url.pathname.startsWith('/login') ||
+      url.pathname.startsWith('/api') ||
+      url.pathname.includes('socket')) return;
+
+  if (url.pathname.startsWith('/public/')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(res => {
+          if (res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); }
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+"""
+
     _SITEMAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
@@ -694,6 +769,10 @@ try:
 
     class _AnalyticsMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
+            if request.url.path == "/manifest.json":
+                return JSONResponse(content=_json.loads(_MANIFEST_JSON), media_type="application/manifest+json")
+            if request.url.path == "/sw.js":
+                return Response(content=_SW_JS, media_type="application/javascript")
             if request.url.path == "/sitemap.xml":
                 return _XMLResponse(content=_SITEMAP_XML, media_type="application/xml")
             if request.url.path != "/auth/analytics":

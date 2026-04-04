@@ -110,7 +110,33 @@
 
     // ── lang attribute ───────────────────────────────────────────────────
     if (!document.documentElement.lang) document.documentElement.lang = 'en';
+
+    // ── PWA manifest ─────────────────────────────────────────────────────
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const mf = document.createElement('link');
+      mf.rel = 'manifest'; mf.href = '/manifest.json';
+      document.head.appendChild(mf);
+    }
+
+    // ── Apple PWA meta tags ───────────────────────────────────────────────
+    meta('apple-mobile-web-app-capable', 'yes');
+    meta('apple-mobile-web-app-status-bar-style', 'black-translucent');
+    meta('apple-mobile-web-app-title', 'Dadi AI');
+    if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+      const atIcon = document.createElement('link');
+      atIcon.rel = 'apple-touch-icon'; atIcon.href = '/public/images/dadi.png';
+      document.head.appendChild(atIcon);
+    }
   })();
+
+  // ── Service Worker registration ─────────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => console.log('[SW] Registered, scope:', reg.scope))
+        .catch(err => console.log('[SW] Registration failed:', err));
+    });
+  }
 
   /* ── Login page: glassmorphism theme ── */
   const loginCss = document.createElement('style');
