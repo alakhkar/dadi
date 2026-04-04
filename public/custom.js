@@ -275,15 +275,6 @@
     glow.style.cssText = 'position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 100%,rgba(139,26,26,0.25)0%,transparent 70%);pointer-events:none;z-index:1;';
     rightPanel.appendChild(glow);
 
-    // Brand text on right panel
-    const brand = document.createElement('div');
-    brand.style.cssText = 'position:absolute;top:36px;left:0;right:0;text-align:center;z-index:2;pointer-events:none;';
-    brand.innerHTML = `
-      <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:#fff;letter-spacing:0.04em;text-shadow:0 2px 20px rgba(0,0,0,0.6);">Dadi AI</div>
-      <div style="font-size:0.78rem;color:rgba(255,255,255,0.5);letter-spacing:0.18em;margin-top:4px;text-transform:uppercase;">She will roast you. She will fix you.</div>
-    `;
-    rightPanel.appendChild(brand);
-
     // ── Left panel: glass card ──
     const leftPanel = rightPanel.previousElementSibling || rightPanel.parentElement?.firstElementChild;
     if (leftPanel && leftPanel !== rightPanel) {
@@ -297,16 +288,16 @@
         shimmer.className = 'dadi-login-shimmer';
         form.insertBefore(shimmer, form.firstChild);
 
-        // Inject "Sign in to Dadi" heading if none exists
-        const existingH = form.querySelector('h1,h2,h3');
-        if (!existingH) {
-          const heading = document.createElement('div');
-          heading.style.cssText = 'text-align:center;margin-bottom:20px;';
-          heading.innerHTML = `
-            <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#fff;letter-spacing:0.02em;">Welcome back</div>
-            <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:4px;">Sign in to chat with your Dadi</div>
+        // Inject Dadi logo + tagline above the "Login to access app" heading
+        if (!form.querySelector('#dadi-form-brand')) {
+          const formBrand = document.createElement('div');
+          formBrand.id = 'dadi-form-brand';
+          formBrand.style.cssText = 'text-align:center;margin-bottom:16px;pointer-events:none;';
+          formBrand.innerHTML = `
+            <img src="/public/logo_dark.png" alt="Dadi AI" style="height:56px;width:auto;display:block;margin:0 auto 8px;" />
+            <div style="font-size:0.78rem;color:rgba(255,255,255,0.55);letter-spacing:0.14em;text-transform:uppercase;">She will roast you. She will fix you.</div>
           `;
-          form.insertBefore(heading, shimmer.nextSibling);
+          form.insertBefore(formBrand, shimmer.nextSibling);
         }
       }
     }
