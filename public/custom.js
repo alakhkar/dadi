@@ -660,7 +660,7 @@
     const l = document.createElement('link');
     l.rel = 'stylesheet';
     l.setAttribute('data-dadi-share-fonts', '1');
-    l.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&family=Anton&display=swap';
+    l.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&family=Anton&family=Kalam:wght@400;700&display=swap';
     document.head.appendChild(l);
   })();
 
@@ -707,7 +707,7 @@ function _roundRect(ctx, x, y, w, h, r) {
     let uPreH = 0;
     if (userText) {
       const uFS = 24, uLH = Math.round(uFS * 1.5);
-      _pc.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      _pc.font = `400 ${uFS}px "Kalam", cursive`;
       let uL = _wrapText(_pc, userText, BW - BPX * 2);
       if (uL.length > 3) uL = uL.slice(0, 3);
       uPreH = 26 + BPY + uFS + (uL.length - 1) * uLH + BPY + 36;
@@ -716,18 +716,18 @@ function _roundRect(ctx, x, y, w, h, r) {
     // Dadi bubble height — find font size that fits all lines (min 14px)
     let dFS = 28, dLH, dLines;
     while (dFS >= 14) {
-      _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+      _pc.font = `400 ${dFS}px "Kalam", cursive`;
       dLH = Math.round(dFS * 1.55);
       dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
       // Accept any font size >= 14 — we no longer truncate
       break;
     }
     dLH = Math.round(dFS * 1.55);
-    _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    _pc.font = `400 ${dFS}px "Kalam", cursive`;
     dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
     // Shrink font to keep image reasonably tall (max ~3000px) but never truncate
     while (dFS > 14) {
-      _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+      _pc.font = `400 ${dFS}px "Kalam", cursive`;
       dLH = Math.round(dFS * 1.55);
       dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
       const neededH = 106 + uPreH + 26 + BPY + dFS + (dLines.length - 1) * dLH + BPY + 40 + 70 + 60;
@@ -735,7 +735,7 @@ function _roundRect(ctx, x, y, w, h, r) {
       dFS -= 2;
     }
     dLH = Math.round(dFS * 1.55);
-    _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    _pc.font = `400 ${dFS}px "Kalam", cursive`;
     dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
     const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
 
@@ -778,7 +778,7 @@ function _roundRect(ctx, x, y, w, h, r) {
 
     // Bottom brand on left
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '400 30px "Space Mono", monospace';
+    ctx.font = '400 30px "Kalam", cursive';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'center';
     ctx.fillText('MYDADI.IN', LW / 2, H - 40);
@@ -795,7 +795,7 @@ function _roundRect(ctx, x, y, w, h, r) {
 
     // "DADI AI" label top-centre of right panel
     ctx.fillStyle = '#8B1A1A';
-    ctx.font = '700 22px "Space Mono", monospace';
+    ctx.font = '700 22px "Kalam", cursive';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'center';
     ctx.fillText('DADI AI', LW + (W - LW) / 2, 72);
@@ -808,7 +808,7 @@ function _roundRect(ctx, x, y, w, h, r) {
     if (userText) {
       // sender label
       ctx.fillStyle = '#9e7a5a';
-      ctx.font = '400 19px "DM Sans", sans-serif';
+      ctx.font = '400 19px "Kalam", cursive';
       ctx.textAlign = 'right';
       ctx.fillText('You', RMAX, curY);
       ctx.textAlign = 'left';
@@ -816,7 +816,7 @@ function _roundRect(ctx, x, y, w, h, r) {
 
       // measure text (max 3 lines)
       const uFS = 24, uLH = Math.round(uFS * 1.5);
-      ctx.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      ctx.font = `400 ${uFS}px "Kalam", cursive`;
       let uLines = _wrapText(ctx, userText, BW - BPX * 2);
       if (uLines.length > 3) { uLines = uLines.slice(0, 3); uLines[2] = uLines[2].replace(/\s+\S*$/, '') + '\u2026'; }
 
@@ -836,7 +836,7 @@ function _roundRect(ctx, x, y, w, h, r) {
 
       // text
       ctx.fillStyle = '#2d1a10';
-      ctx.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      ctx.font = `400 ${uFS}px "Kalam", cursive`;
       uLines.forEach((l, i) => ctx.fillText(l, uBX + BPX, curY + BPY + uFS + i * uLH));
 
       curY += uBH + 36;
@@ -845,7 +845,7 @@ function _roundRect(ctx, x, y, w, h, r) {
     // ── Dadi bubble (left-aligned, brand red) ─────────────────────────────
     // sender label
     ctx.fillStyle = '#9e7a5a';
-    ctx.font = '400 19px "DM Sans", sans-serif';
+    ctx.font = '400 19px "Kalam", cursive';
     ctx.fillText('Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
     curY += 26;
 
@@ -865,14 +865,14 @@ function _roundRect(ctx, x, y, w, h, r) {
 
     // text
     ctx.fillStyle = '#ffffff';
-    ctx.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    ctx.font = `400 ${dFS}px "Kalam", cursive`;
     ctx.letterSpacing = '0.1px';
     dLines.forEach((l, i) => ctx.fillText(l, RX + BPX, curY + BPY + dFS + i * dLH));
     ctx.letterSpacing = '0px';
 
     // Footer
     ctx.fillStyle = '#FF4D00';
-    ctx.font = '400 22px "Space Mono", monospace';
+    ctx.font = '400 22px "Kalam", cursive';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'right';
     ctx.fillText('MYDADI.IN', W - PAD, FY);
