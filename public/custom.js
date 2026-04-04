@@ -557,8 +557,54 @@ function _roundRect(ctx, x, y, w, h, r) {
   async function _generateCard(dadiText, userText) {
     await document.fonts.ready;
 
-    // 4:5 aspect ratio (1080x1350 — Instagram portrait standard)
-    const W = 1080, H = 1350, LW = 360, PAD = 56;
+    const W = 1080, LW = 360, PAD = 56;
+    const BW = W - LW - PAD * 2;
+    const BPX = 30, BPY = 22;
+
+    // ── Pre-measure to compute dynamic canvas height ──────────────────────
+    const _pre = document.createElement('canvas');
+    _pre.width = W; _pre.height = 100;
+    const _pc = _pre.getContext('2d');
+
+    // User bubble height
+    let uPreH = 0;
+    if (userText) {
+      const uFS = 24, uLH = Math.round(uFS * 1.5);
+      _pc.font = `300 italic ${uFS}px "DM Sans", sans-serif`;
+      let uL = _wrapText(_pc, userText, BW - BPX * 2);
+      if (uL.length > 3) uL = uL.slice(0, 3);
+      uPreH = 26 + BPY + uFS + (uL.length - 1) * uLH + BPY + 36;
+    }
+
+    // Dadi bubble height — find font size that fits all lines (min 14px)
+    let dFS = 28, dLH, dLines;
+    while (dFS >= 14) {
+      _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+      dLH = Math.round(dFS * 1.55);
+      dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+      // Accept any font size >= 14 — we no longer truncate
+      break;
+    }
+    dLH = Math.round(dFS * 1.55);
+    _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+    // Shrink font to keep image reasonably tall (max ~3000px) but never truncate
+    while (dFS > 14) {
+      _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+      dLH = Math.round(dFS * 1.55);
+      dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+      const neededH = 106 + uPreH + 26 + BPY + dFS + (dLines.length - 1) * dLH + BPY + 40 + 70 + 60;
+      if (neededH <= 4000) break;
+      dFS -= 2;
+    }
+    dLH = Math.round(dFS * 1.55);
+    _pc.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
+    dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+    const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
+
+    // Final canvas height: top margin + user bubble + dadi label + dadi bubble + footer padding
+    const H = Math.max(1350, 106 + uPreH + 26 + dBH + 40 + 70 + 60);
+
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
@@ -608,9 +654,6 @@ function _roundRect(ctx, x, y, w, h, r) {
 
     const RX   = LW + PAD;
     const RMAX = W - PAD;
-    const BW   = W - LW - PAD * 2;   // bubble max width
-    const BPX  = 30;                  // bubble horizontal padding
-    const BPY  = 22;                  // bubble vertical padding
     const FY   = H - 70;
 
     // "DADI AI" label top-centre of right panel
@@ -669,21 +712,8 @@ function _roundRect(ctx, x, y, w, h, r) {
     ctx.fillText('Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
     curY += 26;
 
-    const dAvailTextH = FY - 40 - curY - BPY * 2;
-    let dFS = 28, dLH;
-    let dLines;
+    // dFS, dLH, dLines, dBH already computed in the pre-measurement pass above
     ctx.letterSpacing = '0.1px';
-    while (dFS >= 14) {
-      ctx.font = `italic 400 ${dFS}px "DM Sans", sans-serif`;
-      dLH = Math.round(dFS * 1.55);
-      dLines = _wrapText(ctx, dadiText, BW - BPX * 2);
-      if (dFS + (dLines.length - 1) * dLH <= dAvailTextH) break;
-      dFS -= 2;
-    }
-    const dMaxL = Math.floor((dAvailTextH - dFS) / dLH) + 1;
-    if (dLines.length > dMaxL) { dLines = dLines.slice(0, dMaxL); dLines[dMaxL - 1] = dLines[dMaxL - 1].replace(/\s+\S*$/, '') + '\u2026'; }
-
-    const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
 
     // bubble
     ctx.fillStyle = '#8B1A1A';
