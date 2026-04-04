@@ -664,6 +664,19 @@
     document.head.appendChild(l);
   })();
 
+  /* ── Pre-load Kalam via FontFace API so canvas can use it reliably ── */
+  async function _ensureKalam() {
+    if (_ensureKalam._done) return;
+    try {
+      const f400 = new FontFace('Kalam', 'url(https://fonts.gstatic.com/s/kalam/v18/YA9dr0Wd4kDdMuhW.ttf)', { weight: '400' });
+      const f700 = new FontFace('Kalam', 'url(https://fonts.gstatic.com/s/kalam/v18/YA9Qr0Wd4kDdMtDqHQLL.ttf)', { weight: '700' });
+      const [loaded400, loaded700] = await Promise.all([f400.load(), f700.load()]);
+      document.fonts.add(loaded400);
+      document.fonts.add(loaded700);
+    } catch (e) { /* fallback silently */ }
+    _ensureKalam._done = true;
+  }
+
   function _wrapText(ctx, text, maxWidth) {
     const words = text.split(' ');
     const lines = [];
@@ -692,6 +705,7 @@ function _roundRect(ctx, x, y, w, h, r) {
   }
 
   async function _generateCard(dadiText, userText) {
+    await _ensureKalam();
     await document.fonts.ready;
 
     const W = 1080, LW = 360, PAD = 56;
