@@ -224,12 +224,19 @@
       background: transparent !important;
     }
 
-    /* Shimmer line at the top of the form card */
+    /* Hide native Chainlit logo on login page (top-left of left panel) */
+    html.dadi-login .dadi-glass-left img:not([id="dadi-form-brand"] img),
+    html.dadi-login .dadi-glass-left > div > img,
+    html.dadi-login .dadi-glass-left a img {
+      display: none !important;
+    }
+
+    /* Shimmer line — between tagline and Login heading */
     html.dadi-login .dadi-login-shimmer {
       display: block;
       height: 2px;
       width: 60%;
-      margin: 0 auto 28px;
+      margin: 16px auto 24px;
       border-radius: 99px;
       background: linear-gradient(90deg, transparent, rgba(220,80,80,0.7), rgba(255,200,200,0.9), rgba(220,80,80,0.7), transparent);
     }
@@ -281,24 +288,26 @@
       leftPanel.classList.add('dadi-glass-left');
       leftPanel.style.position = 'relative';
 
-      // Inject shimmer bar above the form
+      // Inject brand + shimmer into the form
       const form = leftPanel.querySelector('form') || document.querySelector('form');
       if (form && !form.querySelector('.dadi-login-shimmer')) {
-        const shimmer = document.createElement('span');
-        shimmer.className = 'dadi-login-shimmer';
-        form.insertBefore(shimmer, form.firstChild);
-
-        // Inject Dadi logo + tagline above the "Login to access app" heading
+        // 1. Logo + tagline at the very top
         if (!form.querySelector('#dadi-form-brand')) {
           const formBrand = document.createElement('div');
           formBrand.id = 'dadi-form-brand';
-          formBrand.style.cssText = 'text-align:center;margin-bottom:16px;pointer-events:none;';
+          formBrand.style.cssText = 'text-align:center;margin-bottom:0;pointer-events:none;';
           formBrand.innerHTML = `
-            <img src="/public/logo_dark.png" alt="Dadi AI" style="height:56px;width:auto;display:block;margin:0 auto 8px;" />
+            <img src="/public/logo_dark.png" alt="Dadi AI" style="height:112px;width:auto;display:block;margin:0 auto 10px;" />
             <div style="font-size:0.78rem;color:rgba(255,255,255,0.55);letter-spacing:0.14em;text-transform:uppercase;">She will roast you. She will fix you.</div>
           `;
-          form.insertBefore(formBrand, shimmer.nextSibling);
+          form.insertBefore(formBrand, form.firstChild);
         }
+
+        // 2. Shimmer divider after brand, before "Login to access app"
+        const shimmer = document.createElement('span');
+        shimmer.className = 'dadi-login-shimmer';
+        const brand = form.querySelector('#dadi-form-brand');
+        brand.insertAdjacentElement('afterend', shimmer);
       }
     }
   }
