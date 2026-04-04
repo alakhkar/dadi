@@ -632,8 +632,75 @@ def auth_callback(username: str, password: str):
     return None
 
 # ─────────────────────────────────────────────
-# 9. STARTER PROMPTS
+# 9. DADI IMAGE PICKER
 # ─────────────────────────────────────────────
+_DADI_IMAGES = {
+    "karate":   "public/images/dadi_karate.png",
+    "smirk":    "public/images/dadi kicking with smirk.png",
+    "dancing":  "public/images/dadi_dancing.png",
+    "dancing_smirk": "public/images/dadi_dancing_with_smirk.png",
+    "flowers":  "public/images/dadi picking flowers.png",
+    "reading":  "public/images/dadi reading book.png",
+    "tea":      "public/images/dadi tea.png",
+    "default":  "public/images/dadi.png",
+}
+
+def _pick_dadi_image(user_text: str, reply: str) -> str:
+    """Return the path to the most contextually appropriate Dadi image."""
+    combined = (user_text + " " + reply).lower()
+
+    # Scolding / fighting mood
+    if any(w in combined for w in [
+        "scold", "roast", "shame", "karate", "kick", "fight", "slap",
+        "how dare", "behave", "disrespect", "nonsense", "bakwaas",
+        "padhai nahi", "phone band", "uthao", "lazy",
+    ]):
+        return _DADI_IMAGES["karate"]
+
+    # Sarcastic / smirk mood
+    if any(w in combined for w in [
+        "obviously", "of course", "really?", "seriously", "wow beta",
+        "achha", "haan haan", "sach mein", "please", "oh sure",
+    ]):
+        return _DADI_IMAGES["smirk"]
+
+    # Celebrating / happy mood
+    if any(w in combined for w in [
+        "congratulations", "well done", "proud", "shaabash", "dance",
+        "celebrate", "party", "excited", "yay", "win", "pass", "score",
+        "wedding", "birthday", "festival",
+    ]):
+        return random.choice([_DADI_IMAGES["dancing"], _DADI_IMAGES["dancing_smirk"]])
+
+    # Peaceful / garden mood
+    if any(w in combined for w in [
+        "flower", "garden", "nature", "walk", "fresh air", "peaceful",
+        "calm", "slow down", "morning", "stress", "breathe",
+    ]):
+        return _DADI_IMAGES["flowers"]
+
+    # Wisdom / advice mood
+    if any(w in combined for w in [
+        "advice", "wisdom", "read", "book", "learn", "study", "knowledge",
+        "career", "future", "goal", "life lesson", "think",
+    ]):
+        return _DADI_IMAGES["reading"]
+
+    # Chai / relaxed chat
+    if any(w in combined for w in [
+        "chai", "tea", "sit", "relax", "rest", "baat", "baito", "aaо",
+        "tell me", "sun", "suno", "kya hua",
+    ]):
+        return _DADI_IMAGES["tea"]
+
+    # Fallback: rotate through calm images
+    return random.choice([
+        _DADI_IMAGES["default"],
+        _DADI_IMAGES["tea"],
+        _DADI_IMAGES["reading"],
+        _DADI_IMAGES["flowers"],
+    ])
+
 @cl.set_starters
 async def set_starters():
     import random
@@ -735,6 +802,8 @@ async def on_message(message: cl.Message):
         full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
         await msg.stream_token(full_reply)
 
+    image_path = _pick_dadi_image(user_text, full_reply)
+    msg.elements = [cl.Image(path=image_path, name="dadi", display="inline")]
     await msg.update()
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
