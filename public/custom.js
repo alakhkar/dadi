@@ -112,19 +112,132 @@
     if (!document.documentElement.lang) document.documentElement.lang = 'en';
   })();
 
-  /* ── Login page: white background + replace right-panel image with dadi.png ── */
+  /* ── Login page: glassmorphism theme ── */
   const loginCss = document.createElement('style');
-  loginCss.textContent = [
-    'html,body{background:#ffffff!important;}',
-    // Hide the persistent top-center logo on the login page only
-    'html.dadi-login::before{display:none!important;}',
-    'html.dadi-login #dadi-chat-logo{display:none!important;}',
-  ].join('');
+  loginCss.textContent = `
+    /* Hide persistent logo on login page */
+    html.dadi-login::before { display:none!important; }
+    html.dadi-login #dadi-chat-logo { display:none!important; }
+
+    /* Full-page gradient background */
+    html.dadi-login, html.dadi-login body {
+      background: linear-gradient(135deg, #1a0a0a 0%, #2d0f0f 30%, #1a1a2e 65%, #0f0f23 100%) !important;
+      min-height: 100vh;
+    }
+
+    /* Animated floating orbs behind everything */
+    html.dadi-login::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 600px 500px at 15% 20%, rgba(139,26,26,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 500px 400px at 80% 75%, rgba(80,20,80,0.15) 0%, transparent 70%),
+        radial-gradient(ellipse 400px 350px at 60% 10%, rgba(26,26,80,0.18) 0%, transparent 70%);
+    }
+
+    /* Left (form) panel — glass card */
+    html.dadi-login .dadi-glass-left {
+      background: rgba(255,255,255,0.06) !important;
+      backdrop-filter: blur(24px) saturate(160%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+      border-right: 1px solid rgba(255,255,255,0.1) !important;
+    }
+
+    /* All text in the form panel */
+    html.dadi-login form h1,
+    html.dadi-login form h2,
+    html.dadi-login form h3 {
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.02em !important;
+    }
+    html.dadi-login form label,
+    html.dadi-login form p:not(#dadi-otp-status) {
+      color: rgba(255,255,255,0.75) !important;
+    }
+    html.dadi-login h1, html.dadi-login h2 {
+      color: #ffffff !important;
+    }
+
+    /* Glass inputs */
+    html.dadi-login form input {
+      background: rgba(255,255,255,0.08) !important;
+      border: 1px solid rgba(255,255,255,0.18) !important;
+      color: #ffffff !important;
+      border-radius: 10px !important;
+      transition: border-color 0.2s, background 0.2s !important;
+    }
+    html.dadi-login form input::placeholder { color: rgba(255,255,255,0.38) !important; }
+    html.dadi-login form input:focus {
+      background: rgba(255,255,255,0.13) !important;
+      border-color: rgba(220,80,80,0.7) !important;
+      outline: none !important;
+      box-shadow: 0 0 0 3px rgba(139,26,26,0.25) !important;
+    }
+
+    /* Primary submit button */
+    html.dadi-login form button[type="submit"] {
+      background: linear-gradient(135deg, #8B1A1A 0%, #c0392b 100%) !important;
+      border: none !important;
+      color: #fff !important;
+      border-radius: 10px !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.04em !important;
+      box-shadow: 0 4px 20px rgba(139,26,26,0.4) !important;
+      transition: box-shadow 0.2s, transform 0.15s !important;
+    }
+    html.dadi-login form button[type="submit"]:hover {
+      box-shadow: 0 6px 28px rgba(139,26,26,0.55) !important;
+      transform: translateY(-1px) !important;
+    }
+
+    /* Send Code button (injected) */
+    html.dadi-login #dadi-send-code-btn {
+      background: rgba(139,26,26,0.25) !important;
+      border: 1px solid rgba(220,80,80,0.5) !important;
+      color: #ff9999 !important;
+      border-radius: 10px !important;
+      backdrop-filter: blur(8px) !important;
+      transition: background 0.2s !important;
+    }
+    html.dadi-login #dadi-send-code-btn:hover {
+      background: rgba(139,26,26,0.45) !important;
+    }
+
+    /* Guest button */
+    html.dadi-login #dadi-skip-wrapper button {
+      border-color: rgba(255,255,255,0.25) !important;
+      color: rgba(255,255,255,0.7) !important;
+    }
+    html.dadi-login #dadi-skip-wrapper span {
+      color: rgba(255,255,255,0.4) !important;
+    }
+    html.dadi-login #dadi-skip-wrapper button:hover {
+      background: rgba(255,255,255,0.08) !important;
+    }
+
+    /* OTP status text */
+    html.dadi-login #dadi-otp-status { color: #7dffb3 !important; }
+
+    /* Right panel — full dark with Dadi image */
+    html.dadi-login .dadi-glass-right {
+      background: transparent !important;
+    }
+
+    /* Shimmer line at the top of the form card */
+    html.dadi-login .dadi-login-shimmer {
+      display: block;
+      height: 2px;
+      width: 60%;
+      margin: 0 auto 28px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, transparent, rgba(220,80,80,0.7), rgba(255,200,200,0.9), rgba(220,80,80,0.7), transparent);
+    }
+  `;
   document.head.appendChild(loginCss);
 
   function styleLoginPage() {
     if (document.getElementById('dadi-page-styled')) return;
-    // Chainlit's right panel: <div class="relative hidden bg-muted lg:block overflow-hidden">
     const rightPanel = document.querySelector('div.relative.bg-muted');
     if (!rightPanel) return;
 
@@ -134,53 +247,77 @@
     marker.style.display = 'none';
     document.body.appendChild(marker);
 
-    // Mark <html> so CSS can hide the logo on the login page
     document.documentElement.classList.add('dadi-login');
 
-    // White background on the panel itself
-    rightPanel.style.background = '#ffffff';
+    // ── Right panel: dark glass + full-height Dadi image ──
+    rightPanel.classList.add('dadi-glass-right');
+    rightPanel.style.cssText = 'background:linear-gradient(160deg,rgba(30,10,10,0.85)0%,rgba(10,10,30,0.9)100%)!important;';
 
-    // Swap the image: pick a random Dadi image from /public/images/
     const _dadiImages = [
       '/public/images/dadi.png',
       '/public/images/dadi_dancing.png',
       '/public/images/dadi_karate.png',
       '/public/images/dadi_dancing_with_smirk.png',
+      '/public/images/dadi kicking with smirk.png',
+      '/public/images/dadi picking flowers.png',
+      '/public/images/dadi reading book.png',
+      '/public/images/dadi tea.png',
     ];
     const img = rightPanel.querySelector('img');
     if (img) {
       img.src = _dadiImages[Math.floor(Math.random() * _dadiImages.length)];
       img.alt = 'Dadi';
-      img.style.cssText = [
-        'position:absolute', 'inset:0', 'height:100%', 'width:100%',
-        'object-fit:contain', 'object-position:bottom center',
-        'filter:none', 'brightness:unset',
-      ].join(';');
+      img.style.cssText = 'position:absolute;inset:0;height:100%;width:100%;object-fit:contain;object-position:bottom center;filter:drop-shadow(0 0 60px rgba(139,26,26,0.3));';
     }
 
-    // Colour headings + labels to match the Sign In button (#8B1A1A)
-    document.querySelectorAll('form h1, form h2, form h3, form label').forEach(el => {
-      el.style.color = '#8B1A1A';
-    });
+    // Overlay glow on right panel
+    const glow = document.createElement('div');
+    glow.style.cssText = 'position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 100%,rgba(139,26,26,0.25)0%,transparent 70%);pointer-events:none;z-index:1;';
+    rightPanel.appendChild(glow);
 
-    // Also catch the login page title which sits above the form
-    document.querySelectorAll('h1, h2').forEach(el => {
-      if (el.closest('form') || el.textContent.toLowerCase().includes('login') || el.textContent.toLowerCase().includes('access')) {
-        el.style.color = '#8B1A1A';
+    // Brand text on right panel
+    const brand = document.createElement('div');
+    brand.style.cssText = 'position:absolute;top:36px;left:0;right:0;text-align:center;z-index:2;pointer-events:none;';
+    brand.innerHTML = `
+      <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:#fff;letter-spacing:0.04em;text-shadow:0 2px 20px rgba(0,0,0,0.6);">Dadi AI</div>
+      <div style="font-size:0.78rem;color:rgba(255,255,255,0.5);letter-spacing:0.18em;margin-top:4px;text-transform:uppercase;">She will roast you. She will fix you.</div>
+    `;
+    rightPanel.appendChild(brand);
+
+    // ── Left panel: glass card ──
+    const leftPanel = rightPanel.previousElementSibling || rightPanel.parentElement?.firstElementChild;
+    if (leftPanel && leftPanel !== rightPanel) {
+      leftPanel.classList.add('dadi-glass-left');
+      leftPanel.style.position = 'relative';
+
+      // Inject shimmer bar above the form
+      const form = leftPanel.querySelector('form') || document.querySelector('form');
+      if (form && !form.querySelector('.dadi-login-shimmer')) {
+        const shimmer = document.createElement('span');
+        shimmer.className = 'dadi-login-shimmer';
+        form.insertBefore(shimmer, form.firstChild);
+
+        // Inject "Sign in to Dadi" heading if none exists
+        const existingH = form.querySelector('h1,h2,h3');
+        if (!existingH) {
+          const heading = document.createElement('div');
+          heading.style.cssText = 'text-align:center;margin-bottom:20px;';
+          heading.innerHTML = `
+            <div style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:#fff;letter-spacing:0.02em;">Welcome back</div>
+            <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:4px;">Sign in to chat with your Dadi</div>
+          `;
+          form.insertBefore(heading, shimmer.nextSibling);
+        }
       }
-    });
-
-    // White background on all inputs
-    document.querySelectorAll('form input').forEach(el => {
-      el.style.backgroundColor = '#ffffff';
-    });
+    }
   }
 
-  /* ── Persist login page text/input colours on re-renders ── */
+  /* ── Persist glass styles on re-renders ── */
   const loginColorCss = document.createElement('style');
   loginColorCss.textContent = `
-    form h1, form h2, form h3, form label { color: #8B1A1A !important; }
-    form input { background-color: #ffffff !important; }
+    html.dadi-login form h1, html.dadi-login form h2, html.dadi-login form h3 { color:#fff!important; }
+    html.dadi-login form label { color:rgba(255,255,255,0.75)!important; }
+    html.dadi-login form input { background:rgba(255,255,255,0.08)!important; color:#fff!important; border-color:rgba(255,255,255,0.18)!important; }
   `;
   document.head.appendChild(loginColorCss);
 
