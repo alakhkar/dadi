@@ -1030,6 +1030,7 @@ function _roundRect(ctx, x, y, w, h, r) {
   ];
 
   async function _generateMeme(text, imgSrc) {
+    await _ensureKalam();
     await document.fonts.ready;
     const SIZE = 1080;
     const canvas = document.createElement('canvas');
@@ -1061,14 +1062,14 @@ function _roundRect(ctx, x, y, w, h, r) {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // Meme text — Anton font, white fill + black stroke (classic meme style)
+    // Meme text — Kalam font, white fill + black stroke
     const PAD = 44;
     const maxW = SIZE - PAD * 2;
-    const memeText = _cleanText(text).toUpperCase();
+    const memeText = _cleanText(text);
 
     let fontSize = 96, lines;
     while (fontSize >= 40) {
-      ctx.font = `900 ${fontSize}px 'Anton', 'Impact', sans-serif`;
+      ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
       lines = _wrapText(ctx, memeText, maxW);
       if (lines.length <= 4) break;
       fontSize -= 8;
@@ -1078,10 +1079,10 @@ function _roundRect(ctx, x, y, w, h, r) {
       lines[3] = lines[3].replace(/\s+\S*$/, '') + '\u2026';
     }
 
-    const lh = Math.round(fontSize * 1.18);
+    const lh = Math.round(fontSize * 1.25);
     let y = SIZE - PAD - (lines.length - 1) * lh;
 
-    ctx.font = `900 ${fontSize}px 'Anton', 'Impact', sans-serif`;
+    ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
     ctx.lineWidth = Math.round(fontSize * 0.09);
@@ -1095,7 +1096,7 @@ function _roundRect(ctx, x, y, w, h, r) {
     });
 
     // Watermark top-right
-    ctx.font = `400 26px 'Space Mono', monospace`;
+    ctx.font = `700 26px 'Kalam', cursive`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.fillStyle = '#FF4D00';
