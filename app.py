@@ -4,6 +4,11 @@ import os
 import json
 import random
 import string
+import uuid
+import io
+import textwrap
+import re
+import asyncio
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
@@ -922,10 +927,61 @@ self.addEventListener('fetch', e => {
             await _set_daily_optin(email, value)
         return RedirectResponse(url=f"/profile?email={email}", status_code=303)
 
+    # ── Share card endpoints ──────────────────────────────────────────────────
+    from fastapi.responses import Response as _BinaryResponse
+
+    @_cl_app.get("/card/{card_id}")
+    async def serve_card(card_id: str):
+        png = _SHARE_CARDS.get(card_id)
+        if not png:
+            return JSONResponse({"error": "Card not found"}, status_code=404)
+        return _BinaryResponse(content=png, media_type="image/png", headers={
+            "Cache-Control": "public, max-age=86400",
+        })
+
+    @_cl_app.get("/share/{card_id}")
+    async def share_page(card_id: str, request: Request):
+        png = _SHARE_CARDS.get(card_id)
+        if not png:
+            return JSONResponse({"error": "Card not found"}, status_code=404)
+        base = str(request.base_url).rstrip("/")
+        img_url  = f"{base}/card/{card_id}"
+        share_url = f"{base}/share/{card_id}"
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dadi Ne Bola — mydadi.in</title>
+<meta property="og:title" content="Dadi Ne Bola">
+<meta property="og:description" content="Chat with Dadi — she will roast you, love you, and fix you. mydadi.in">
+<meta property="og:image" content="{img_url}">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="480">
+<meta property="og:url" content="{share_url}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{img_url}">
+<style>
+  body{{margin:0;background:#FDF6F0;font-family:Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}}
+  img{{max-width:100%;border-radius:12px;box-shadow:0 8px 40px rgba(139,26,26,.15)}}
+  a.cta{{display:inline-block;margin-top:20px;padding:12px 28px;background:#8B1A1A;color:#fff;border-radius:8px;text-decoration:none;font-size:1rem}}
+  p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}
+</style>
+</head>
+<body>
+<img src="{img_url}" alt="Dadi Ne Bola">
+<a class="cta" href="/">Aaja, Dadi se baat kar →</a>
+<p>mydadi.in — She will roast you. She will fix you.</p>
+</body>
+</html>"""
+        return HTMLResponse(html)
+
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
     print("[Analytics] Dashboard middleware registered at GET/POST /auth/analytics ✓")
     print("[Profile] Profile page registered at GET/POST /profile ✓")
+    print("[Share] Card endpoints registered at /card/{id} and /share/{id} ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
@@ -1021,6 +1077,77 @@ def _pick_dadi_image(user_text: str, reply: str) -> str:
         _DADI_IMAGES["reading"],
         _DADI_IMAGES["flowers"],
     ])
+
+# ─────────────────────────────────────────────
+# 9b. SHARE CARD GENERATOR
+# ─────────────────────────────────────────────
+_SHARE_CARDS: dict[str, bytes] = {}  # card_id → PNG bytes (in-memory, MVP)
+
+def _try_font(size: int):
+    """Load best available font for the deployment environment."""
+    from PIL import ImageFont
+    for path in [
+        "public/fonts/Kalam-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "C:/Windows/Fonts/georgia.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    ]:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def _generate_share_card(text: str) -> bytes:
+    """Generate a shareable 'Dadi Ne Bola' PNG card from a Dadi reply."""
+    from PIL import Image, ImageDraw
+
+    W, H = 800, 480
+    BG   = (253, 246, 240)   # warm cream #FDF6F0
+    RED  = (139, 26, 26)     # dadi red  #8B1A1A
+    TAN  = (158, 122, 90)    # warm tan  #9e7a5a
+    DARK = (45, 26, 16)      # dark text #2d1a10
+
+    img  = Image.new("RGB", (W, H), BG)
+    draw = ImageDraw.Draw(img)
+
+    # Layered border (red outer, tan inner)
+    for i in range(5):
+        draw.rectangle([i, i, W-1-i, H-1-i], outline=RED if i < 3 else TAN)
+    draw.rectangle([18, 18, W-19, H-19], outline=TAN, width=1)
+
+    font_header = _try_font(20)
+    font_quote  = _try_font(26)
+    font_attr   = _try_font(17)
+    font_brand  = _try_font(13)
+
+    # Header
+    draw.text((W // 2, 44), "Dadi Ne Bola", fill=RED, font=font_header, anchor="mm")
+    draw.line([(W//2 - 90, 60), (W//2 + 90, 60)], fill=TAN, width=1)
+
+    # Clean up text: strip markdown, chapter headers, truncate
+    clean = re.sub(r'\*\*[^*]+\*\*\n\n', '', text)
+    clean = re.sub(r'\*\*|\*|#{1,3}\s?', '', clean).strip()
+    if len(clean) > 260:
+        clean = clean[:257] + "..."
+
+    # Wrap and draw quote
+    lines = textwrap.wrap(clean, width=44)[:7]
+    y = 85
+    for line in lines:
+        draw.text((W // 2, y), line, fill=DARK, font=font_quote, anchor="mm")
+        y += 42
+
+    # Attribution + branding
+    draw.line([(W//2 - 70, H - 88), (W//2 + 70, H - 88)], fill=TAN, width=1)
+    draw.text((W // 2, H - 68), "— Pushpa Devi Sharma (Dadi)", fill=TAN, font=font_attr, anchor="mm")
+    draw.text((W // 2, H - 38), "mydadi.in", fill=RED, font=font_brand, anchor="mm")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 @cl.set_starters
 async def set_starters():
@@ -1182,6 +1309,38 @@ async def on_message(message: cl.Message):
 
     image_path = _pick_dadi_image(user_text, full_reply)
     msg.elements = [cl.Image(path=image_path, name="dadi", display="inline")]
+
+    # Add Share + Roast buttons on normal replies (not story chapters, not errors)
+    is_story_msg = _is_story_request(user_text)
+    is_error     = full_reply.startswith("*Arre!* Something")
+    is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
+    if not is_story_msg and not is_error:
+        # Generate share card in background and store; pass card_id in action value
+        card_id = str(uuid.uuid4()).replace("-", "")[:16]
+        try:
+            loop = asyncio.get_event_loop()
+            png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
+            _SHARE_CARDS[card_id] = png_bytes
+        except Exception as e:
+            print(f"[Share] Card generation failed: {e}")
+            card_id = ""
+
+        action_list = []
+        if card_id:
+            action_list.append(cl.Action(
+                name="share_card",
+                value=card_id,
+                label="🪄 Share kar — Dadi Ne Bola",
+            ))
+        if not is_roast_req:
+            action_list.append(cl.Action(
+                name="roast_me",
+                value="roast",
+                label="🔥 Roast me, Dadi!",
+            ))
+        if action_list:
+            msg.actions = action_list
+
     await msg.update()
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
@@ -1263,6 +1422,97 @@ async def on_daily_optin(action: cl.Action):
         ),
         author="Dadi 👵🏾",
     ).send()
+    await action.remove()
+
+
+@cl.action_callback("share_card")
+async def on_share_card(action: cl.Action):
+    card_id = action.value
+    if not card_id or card_id not in _SHARE_CARDS:
+        await cl.Message(
+            content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
+            author="Dadi 👵🏾",
+        ).send()
+        await action.remove()
+        return
+
+    base = "https://www.mydadi.in"
+
+    share_url = f"{base}/share/{card_id}"
+    card_url  = f"{base}/card/{card_id}"
+
+    await cl.Message(
+        content=(
+            f"Le beta, tera Dadi ka card ready hai! 🪄\n\n"
+            f"**Share link:** {share_url}\n\n"
+            f"Yeh link WhatsApp, Instagram story, ya X pe share kar — "
+            f"log poochhenge 'yeh Dadi kaun hai?' and that's the plan. 😄"
+        ),
+        author="Dadi 👵🏾",
+        elements=[cl.Image(url=card_url, name="share_preview", display="inline")],
+    ).send()
+    await action.remove()
+
+
+@cl.action_callback("roast_me")
+async def on_roast_me(action: cl.Action):
+    messages = cl.user_session.get("messages", [])
+    # Build a short context so the roast is personalised
+    recent_user_lines = [
+        m["content"][:120] for m in messages if m["role"] == "user"
+    ][-4:]
+    context_hint = (
+        "Based on what the user has shared: " + " | ".join(recent_user_lines)
+        if recent_user_lines else ""
+    )
+
+    memories = cl.user_session.get("memories", [])
+    memory_hint = (
+        "Dadi also knows: " + "; ".join(memories[:5])
+        if memories else ""
+    )
+
+    roast_prompt = (
+        f"The user just clicked 'Roast me, Dadi!' — they are ASKING for it. "
+        f"Deploy the ROAST OVERRIDE fully. Be sharp, punchy, and devastating — "
+        f"but land with one line of hidden affection at the end. "
+        f"{context_hint} {memory_hint}"
+    )
+
+    msg = cl.Message(content="", author="Dadi 👵🏾")
+    await msg.send()
+    full_roast = ""
+
+    try:
+        history_msgs = [
+            HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
+            for m in messages[-6:]
+        ]
+        llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT)] + history_msgs + [HumanMessage(content=roast_prompt)]
+        async for chunk in LLM.astream(llm_msgs):
+            full_roast += chunk.content
+            await msg.stream_token(chunk.content)
+    except Exception as e:
+        full_roast = "Arre beta, roast karte karte mujhe khud hi ghabrahat ho gayi. Phir aana. 😂"
+        await msg.stream_token(full_roast)
+
+    # Generate share card for the roast
+    card_id = str(uuid.uuid4()).replace("-", "")[:16]
+    try:
+        loop = asyncio.get_event_loop()
+        png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
+        _SHARE_CARDS[card_id] = png_bytes
+        msg.actions = [cl.Action(name="share_card", value=card_id, label="🪄 Share kar — Dadi Ne Bola")]
+    except Exception as e:
+        print(f"[Roast] Card generation failed: {e}")
+
+    msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
+    await msg.update()
+
+    messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
+    messages.append({"role": "assistant", "content": full_roast})
+    cl.user_session.set("messages", messages)
+
     await action.remove()
 
 
