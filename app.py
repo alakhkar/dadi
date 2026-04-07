@@ -783,6 +783,47 @@ self.addEventListener('fetch', e => {
                 return _XMLResponse(content=_SW_JS, media_type="application/javascript")
             if request.url.path == "/sitemap.xml":
                 return _XMLResponse(content=_SITEMAP_XML, media_type="application/xml")
+
+            # Share card routes — must be handled here (before Chainlit SPA catch-all)
+            if request.url.path.startswith("/card/"):
+                cid = request.url.path[len("/card/"):]
+                png = _load_card(cid)
+                if not png:
+                    return JSONResponse({"error": "Card not found"}, status_code=404)
+                return _XMLResponse(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+            if request.url.path.startswith("/share/"):
+                cid = request.url.path[len("/share/"):]
+                png = _load_card(cid)
+                base = str(request.base_url).rstrip("/")
+                img_url   = f"{base}/card/{cid}"
+                share_url = f"{base}/share/{cid}"
+                if not png:
+                    html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Dadi Ne Bola</title></head>
+<body style="font-family:Georgia,serif;text-align:center;padding:40px;background:#FDF6F0;color:#8B1A1A">
+<h2>Arre beta, yeh card nahi mila!</h2><p>Shayad link purana ho gaya. <a href="/">Wapas Dadi ke paas aa.</a></p>
+</body></html>"""
+                    return _HTMLResponse(html, status_code=404)
+                html = f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dadi Ne Bola — mydadi.in</title>
+<meta property="og:title" content="Dadi Ne Bola">
+<meta property="og:description" content="Chat with Dadi — she will roast you, love you, and fix you. mydadi.in">
+<meta property="og:image" content="{img_url}">
+<meta property="og:image:width" content="800"><meta property="og:image:height" content="480">
+<meta property="og:url" content="{share_url}"><meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{img_url}">
+<style>body{{margin:0;background:#FDF6F0;font-family:Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}}
+img{{max-width:100%;border-radius:12px;box-shadow:0 8px 40px rgba(139,26,26,.15)}}
+a.cta{{display:inline-block;margin-top:20px;padding:12px 28px;background:#8B1A1A;color:#fff;border-radius:8px;text-decoration:none;font-size:1rem}}
+p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}</style>
+</head><body>
+<img src="{img_url}" alt="Dadi Ne Bola">
+<a class="cta" href="/">Aaja, Dadi se baat kar →</a>
+<p>mydadi.in — She will roast you. She will fix you.</p>
+</body></html>"""
+                return _HTMLResponse(html)
+
             if request.url.path != "/auth/analytics":
                 return await call_next(request)
             if request.method == "GET":
@@ -935,7 +976,7 @@ self.addEventListener('fetch', e => {
 
     @_cl_app.get("/card/{card_id}")
     async def serve_card(card_id: str):
-        png = _SHARE_CARDS.get(card_id)
+        png = _load_card(card_id)
         if not png:
             return JSONResponse({"error": "Card not found"}, status_code=404)
         return _BinaryResponse(content=png, media_type="image/png", headers={
@@ -944,7 +985,7 @@ self.addEventListener('fetch', e => {
 
     @_cl_app.get("/share/{card_id}")
     async def share_page(card_id: str, request: Request):
-        png = _SHARE_CARDS.get(card_id)
+        png = _load_card(card_id)
         if not png:
             return JSONResponse({"error": "Card not found"}, status_code=404)
         base = str(request.base_url).rstrip("/")
@@ -1084,7 +1125,29 @@ def _pick_dadi_image(user_text: str, reply: str) -> str:
 # ─────────────────────────────────────────────
 # 9b. SHARE CARD GENERATOR
 # ─────────────────────────────────────────────
-_SHARE_CARDS: dict[str, bytes] = {}  # card_id → PNG bytes (in-memory, MVP)
+_SHARE_CARDS: dict[str, bytes] = {}  # card_id → PNG bytes (write-through cache)
+_CARDS_DIR = "/tmp/dadi_cards"
+os.makedirs(_CARDS_DIR, exist_ok=True)
+
+def _save_card(card_id: str, png: bytes) -> None:
+    _SHARE_CARDS[card_id] = png
+    try:
+        with open(os.path.join(_CARDS_DIR, card_id + ".png"), "wb") as f:
+            f.write(png)
+    except Exception as e:
+        print(f"[Share] Disk save failed: {e}")
+
+def _load_card(card_id: str) -> bytes | None:
+    if card_id in _SHARE_CARDS:
+        return _SHARE_CARDS[card_id]
+    try:
+        path = os.path.join(_CARDS_DIR, card_id + ".png")
+        with open(path, "rb") as f:
+            png = f.read()
+        _SHARE_CARDS[card_id] = png
+        return png
+    except FileNotFoundError:
+        return None
 
 def _try_font(size: int):
     """Load best available font for the deployment environment."""
@@ -1343,7 +1406,7 @@ async def on_message(message: cl.Message):
         try:
             loop = asyncio.get_event_loop()
             png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
-            _SHARE_CARDS[card_id] = png_bytes
+            _save_card(card_id, png_bytes)
         except Exception as e:
             print(f"[Share] Card generation failed: {e}")
             card_id = ""
@@ -1451,7 +1514,7 @@ async def on_daily_optin(action: cl.Action):
 @cl.action_callback("share_card")
 async def on_share_card(action: cl.Action):
     card_id = action.payload.get("card_id", "")
-    if not card_id or card_id not in _SHARE_CARDS:
+    if not card_id or not _load_card(card_id):
         await cl.Message(
             content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
             author="Dadi 👵🏾",
@@ -1524,7 +1587,7 @@ async def on_roast_me(action: cl.Action):
     try:
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
-        _SHARE_CARDS[card_id] = png_bytes
+        _save_card(card_id, png_bytes)
         msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
