@@ -264,11 +264,14 @@ async def _web_search(query: str, max_results: int = 3) -> list[dict]:
     try:
         from duckduckgo_search import DDGS
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None,
-            lambda: list(DDGS().text(query, max_results=max_results))
+        results = await asyncio.wait_for(
+            loop.run_in_executor(None, lambda: list(DDGS().text(query, max_results=max_results))),
+            timeout=6.0,
         )
         return results
+    except asyncio.TimeoutError:
+        print("[Search] DuckDuckGo timed out")
+        return []
     except Exception as e:
         print(f"[Search] DuckDuckGo failed: {e}")
         return []
@@ -1282,8 +1285,17 @@ async def on_message(message: cl.Message):
             llm_msgs = [SystemMessage(content=story_system)] + history_msgs + [HumanMessage(content=user_text)]
 
             # Collect full response (no streaming — must split before displaying)
-            async for chunk in LLM.astream(llm_msgs):
-                full_reply += chunk.content
+            async def _collect_story():
+                nonlocal full_reply
+                async for chunk in LLM.astream(llm_msgs):
+                    full_reply += chunk.content
+
+            try:
+                await asyncio.wait_for(_collect_story(), timeout=60.0)
+            except asyncio.TimeoutError:
+                print("[LLM] Story stream timed out")
+                if not full_reply:
+                    full_reply = "Arre beta, Dadi thak gayi — story baad mein sunao. Abhi dobara poocho!"
 
             raw_chapters = [c.strip() for c in full_reply.split("<<<CHAPTER>>>") if c.strip()]
             while len(raw_chapters) < 3:
@@ -1299,9 +1311,20 @@ async def on_message(message: cl.Message):
 
         else:
             llm_msgs = [SystemMessage(content=base_system)] + history_msgs + [HumanMessage(content=user_text)]
-            async for chunk in LLM.astream(llm_msgs):
-                full_reply += chunk.content
-                await msg.stream_token(chunk.content)
+
+            async def _stream_reply():
+                nonlocal full_reply
+                async for chunk in LLM.astream(llm_msgs):
+                    full_reply += chunk.content
+                    await msg.stream_token(chunk.content)
+
+            try:
+                await asyncio.wait_for(_stream_reply(), timeout=50.0)
+            except asyncio.TimeoutError:
+                print("[LLM] Reply stream timed out")
+                if not full_reply:
+                    full_reply = "*Arre beta*, Dadi ka connection thoda slow hai. Ek baar phir poocho!"
+                    await msg.stream_token(full_reply)
 
     except Exception as e:
         full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
