@@ -1859,19 +1859,20 @@ async def on_message(message: cl.Message):
         await msg.stream_token(full_reply)
 
     image_path = _pick_dadi_image(user_text, full_reply)
-    msg.elements = [cl.Image(path=image_path, name="dadi", display="inline")]
+    elements = [cl.Image(path=image_path, name="dadi", display="inline")]
 
     # Add Share + Roast buttons on normal replies (not story chapters, not errors)
     is_story_msg = _is_story_request(user_text)
     is_error     = full_reply.startswith("*Arre!* Something")
     is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
     if not is_story_msg and not is_error:
-        # Generate share card in background and store; pass card_id in action value
+        # Generate share card and show it as inline preview
         card_id = str(uuid.uuid4()).replace("-", "")
         try:
             loop = asyncio.get_event_loop()
             png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
             await _save_card(card_id, png_bytes)
+            elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         except Exception as e:
             print(f"[Share] Card generation failed: {e}")
             card_id = ""
@@ -1891,6 +1892,8 @@ async def on_message(message: cl.Message):
             ))
         if action_list:
             msg.actions = action_list
+
+    msg.elements = elements
 
     await msg.update()
     messages.append({"role": "assistant", "content": full_reply})
@@ -2049,15 +2052,17 @@ async def on_roast_me(action: cl.Action):
 
     # Generate share card for the roast
     card_id = str(uuid.uuid4()).replace("-", "")
+    roast_elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     try:
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
         await _save_card(card_id, png_bytes)
+        roast_elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
 
-    msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
+    msg.elements = roast_elements
     await msg.update()
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
