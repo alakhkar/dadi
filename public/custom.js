@@ -1349,21 +1349,6 @@ function _roundRect(ctx, x, y, w, h, r) {
       const btnCls  = existingBtn ? existingBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
       const svgCls  = existingBtn?.querySelector('svg')?.getAttribute('class') || 'lucide h-4 w-4';
 
-      // Share button
-      const shareBtn = document.createElement('button');
-      shareBtn.className = btnCls + 'dadi-share-btn';
-      shareBtn.title = 'Share as image';
-      shareBtn.innerHTML =
-        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${svgCls}">` +
-          '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
-          '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
-        '</svg>';
-      shareBtn.onclick = e => {
-        e.stopPropagation();
-        const dadiText = (article.innerText || article.textContent || '').trim();
-        showShareModal(dadiText, findUserMessageForArticle(article));
-      };
-
       // Meme button
       const memeBtn = document.createElement('button');
       memeBtn.className = btnCls + 'dadi-meme-btn';
@@ -1380,7 +1365,6 @@ function _roundRect(ctx, x, y, w, h, r) {
         showMemeModal((article.innerText || article.textContent || '').trim());
       };
 
-      bar.appendChild(shareBtn);
       bar.appendChild(memeBtn);
     });
   }

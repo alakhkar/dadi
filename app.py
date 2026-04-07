@@ -2014,13 +2014,12 @@ async def on_message(message: cl.Message):
     is_error     = full_reply.startswith("*Arre!* Something")
     is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
     if not is_story_msg and not is_error:
-        # Generate share card and show it as inline preview
+        # Generate share card in background (not shown inline — only on button click)
         card_id = str(uuid.uuid4()).replace("-", "")
         try:
             loop = asyncio.get_event_loop()
             png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply, user_text)
             await _save_card(card_id, png_bytes)
-            elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         except Exception as e:
             print(f"[Share] Card generation failed: {e}")
             card_id = ""
@@ -2198,19 +2197,17 @@ async def on_roast_me(action: cl.Action):
         full_roast = "Arre beta, roast karte karte mujhe khud hi ghabrahat ho gayi. Phir aana. 😂"
         await msg.stream_token(full_roast)
 
-    # Generate share card for the roast
+    # Generate share card for the roast (not shown inline — only on button click)
     card_id = str(uuid.uuid4()).replace("-", "")
-    roast_elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     try:
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast, "Roast me, Dadi!")
         await _save_card(card_id, png_bytes)
-        roast_elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
 
-    msg.elements = roast_elements
+    msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     await msg.update()
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
