@@ -352,11 +352,30 @@ async def _get_ipl_match_data() -> dict | None:
                         })
 
         result["fetched_at"] = int(now)
-        _IPL_DATA_CACHE["data"] = result
-        _IPL_DATA_CACHE["ts"]   = now
+
+        if result["matches"]:
+            # Match found — cache it. If ended, keep it for 2 hours so
+            # post-match commentary stays visible after it leaves currentMatches.
+            match_ended = any(m.get("matchEnded") for m in result["matches"])
+            _IPL_DATA_CACHE["data"] = result
+            _IPL_DATA_CACHE["ts"]   = now if not match_ended else now - _CRICKET_TTL + 7200
+        elif _IPL_DATA_CACHE["data"]:
+            # No IPL match in API response — keep serving last known data
+            # for up to 2 hours so the page doesn't go blank right after a match ends.
+            last_ts = _IPL_DATA_CACHE["ts"]
+            if now - last_ts < 7200:
+                print("[IPL] No live match found, serving cached data from last match")
+                return _IPL_DATA_CACHE["data"]
+            # Cache expired — clear it
+            _IPL_DATA_CACHE["data"] = None
+
         return result
     except Exception as e:
         print(f"[IPL] Data fetch failed: {e}")
+        # On error, return stale cache if available rather than None
+        if _IPL_DATA_CACHE["data"]:
+            print("[IPL] Returning stale cache after fetch error")
+            return _IPL_DATA_CACHE["data"]
         return None
 
 
@@ -374,10 +393,13 @@ async def _get_ipl_commentary(match_data: dict) -> list[dict]:
     overs_snapshot = "|".join(snap_parts)
 
     now = time.time()
+    match_ended = any(m.get("matchEnded") for m in match_data.get("matches", []))
+    # After match ends, keep commentary for 2 hours (no point regenerating)
+    commentary_ttl = 7200 if match_ended else 600
     if (
         _IPL_COMMENTARY_CACHE["commentary"]
         and _IPL_COMMENTARY_CACHE["overs_snapshot"] == overs_snapshot
-        and now - _IPL_COMMENTARY_CACHE["ts"] < 600  # 10 min max age
+        and now - _IPL_COMMENTARY_CACHE["ts"] < commentary_ttl
     ):
         return _IPL_COMMENTARY_CACHE["commentary"]
 
