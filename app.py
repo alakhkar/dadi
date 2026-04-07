@@ -1339,7 +1339,7 @@ async def on_message(message: cl.Message):
     is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
     if not is_story_msg and not is_error:
         # Generate share card in background and store; pass card_id in action value
-        card_id = str(uuid.uuid4()).replace("-", "")[:16]
+        card_id = str(uuid.uuid4()).replace("-", "")
         try:
             loop = asyncio.get_event_loop()
             png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
@@ -1352,7 +1352,7 @@ async def on_message(message: cl.Message):
         if card_id:
             action_list.append(cl.Action(
                 name="share_card",
-                payload={"value": card_id},
+                payload={"card_id": card_id},
                 label="🪄 Share kar — Dadi Ne Bola",
             ))
         if not is_roast_req:
@@ -1450,7 +1450,7 @@ async def on_daily_optin(action: cl.Action):
 
 @cl.action_callback("share_card")
 async def on_share_card(action: cl.Action):
-    card_id = action.payload.get("value", "")
+    card_id = action.payload.get("card_id", "")
     if not card_id or card_id not in _SHARE_CARDS:
         await cl.Message(
             content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
@@ -1520,12 +1520,12 @@ async def on_roast_me(action: cl.Action):
         await msg.stream_token(full_roast)
 
     # Generate share card for the roast
-    card_id = str(uuid.uuid4()).replace("-", "")[:16]
+    card_id = str(uuid.uuid4()).replace("-", "")
     try:
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
         _SHARE_CARDS[card_id] = png_bytes
-        msg.actions = [cl.Action(name="share_card", payload={"value": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
+        msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
 
