@@ -262,7 +262,7 @@ async def _get_cricket_context() -> str:
 async def _web_search(query: str, max_results: int = 3) -> list[dict]:
     """DuckDuckGo search, returns list of {title, body, href}. Never raises."""
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
         loop = asyncio.get_event_loop()
         results = await asyncio.wait_for(
             loop.run_in_executor(None, lambda: list(DDGS().text(query, max_results=max_results))),
