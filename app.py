@@ -1631,50 +1631,159 @@ def _try_font(size: int):
             pass
     return ImageFont.load_default()
 
-def _generate_share_card(text: str) -> bytes:
-    """Generate a shareable 'Dadi Ne Bola' PNG card from a Dadi reply."""
+def _generate_share_card(dadi_text: str, user_text: str = "") -> bytes:
+    """Generate a share card matching the client-side canvas style:
+    white left panel with Dadi image, cream right panel with chat bubbles."""
     from PIL import Image, ImageDraw
 
-    W, H = 800, 480
-    BG   = (253, 246, 240)   # warm cream #FDF6F0
-    RED  = (139, 26, 26)     # dadi red  #8B1A1A
-    TAN  = (158, 122, 90)    # warm tan  #9e7a5a
-    DARK = (45, 26, 16)      # dark text #2d1a10
+    # ── Colours matching the JS canvas ──────────────────────────────────────
+    WHITE  = (255, 255, 255)
+    CREAM  = (242, 237, 232)   # #F2EDE8
+    RED    = (139, 26, 26)     # #8B1A1A
+    ORANGE = (255, 77, 0)      # #FF4D00
+    DARK   = (45, 26, 16)      # #2d1a10
+    TAN    = (158, 122, 90)    # #9e7a5a
 
-    img  = Image.new("RGB", (W, H), BG)
+    W  = 1080
+    LW = 360        # left panel width
+    PAD = 56
+    BPX, BPY = 30, 22
+    BW = W - LW - PAD * 2     # bubble width
+
+    # ── Clean text ────────────────────────────────────────────────────────────
+    def _clean(t):
+        t = re.sub(r'\*\*[^*]+\*\*\n\n', '', t)
+        t = re.sub(r'\*\*|\*|#{1,3}\s?', '', t).strip()
+        return t
+
+    dadi_clean = _clean(dadi_text)
+    user_clean = _clean(user_text)[:200] if user_text else ""
+
+    # ── Fonts ─────────────────────────────────────────────────────────────────
+    f_brand  = _try_font(30)   # "MYDADI.IN" bottom-left
+    f_header = _try_font(22)   # "DADI AI" top-right
+    f_label  = _try_font(19)   # "You" / "Dadi 👵🏾" labels
+    f_user   = _try_font(24)   # user bubble text
+    f_dadi   = _try_font(28)   # dadi bubble text (may shrink)
+
+    # ── Pre-measure heights ───────────────────────────────────────────────────
+    def wrap(text, font, max_w, draw_dummy):
+        words = text.split()
+        lines, line = [], ""
+        for w in words:
+            test = (line + " " + w).strip()
+            if draw_dummy.textlength(test, font=font) > max_w and line:
+                lines.append(line); line = w
+            else:
+                line = test
+        if line:
+            lines.append(line)
+        return lines
+
+    # We need a dummy draw to measure
+    dummy_img  = Image.new("RGB", (W, 100))
+    dummy_draw = ImageDraw.Draw(dummy_img)
+
+    # User bubble
+    u_lines, u_bh = [], 0
+    if user_clean:
+        u_lines = wrap(user_clean, f_user, BW - BPX * 2, dummy_draw)[:3]
+        u_fs, u_lh = 24, 36
+        u_bh = BPY + u_fs + (len(u_lines) - 1) * u_lh + BPY + 26 + 36  # includes label + gap
+
+    # Dadi bubble — shrink font if text is very long
+    d_fs = 28
+    while d_fs >= 14:
+        f_dadi = _try_font(d_fs)
+        d_lines = wrap(dadi_clean, f_dadi, BW - BPX * 2, dummy_draw)
+        d_lh = round(d_fs * 1.55)
+        d_bh = BPY + d_fs + (len(d_lines) - 1) * d_lh + BPY
+        needed = 106 + u_bh + 26 + d_bh + 40 + 70 + 60
+        if needed <= 4000:
+            break
+        d_fs -= 2
+
+    H = max(1350, 106 + u_bh + 26 + d_bh + 40 + 70 + 60)
+
+    # ── Build canvas ─────────────────────────────────────────────────────────
+    img  = Image.new("RGB", (W, H), WHITE)
     draw = ImageDraw.Draw(img)
 
-    # Layered border (red outer, tan inner)
-    for i in range(5):
-        draw.rectangle([i, i, W-1-i, H-1-i], outline=RED if i < 3 else TAN)
-    draw.rectangle([18, 18, W-19, H-19], outline=TAN, width=1)
+    # Left panel (white — already white background)
+    # Right panel (cream)
+    draw.rectangle([LW, 0, W, H], fill=CREAM)
 
-    font_header = _try_font(20)
-    font_quote  = _try_font(26)
-    font_attr   = _try_font(17)
-    font_brand  = _try_font(13)
+    # ── Dadi image in left panel ─────────────────────────────────────────────
+    _card_images = [
+        "public/images/dadi.png",
+        "public/images/dadi_dancing.png",
+        "public/images/dadi_karate.png",
+        "public/images/dadi_dancing_with_smirk.png",
+    ]
+    for img_path in _card_images:
+        try:
+            dadi_img = Image.open(img_path).convert("RGBA")
+            max_w, max_h = LW - 40, H - 100
+            scale = min(max_w / dadi_img.width, max_h / dadi_img.height)
+            dw, dh = int(dadi_img.width * scale), int(dadi_img.height * scale)
+            dadi_img = dadi_img.resize((dw, dh), Image.LANCZOS)
+            x = (LW - dw) // 2
+            y = (H - dh) // 2 - 30
+            img.paste(dadi_img, (x, y), dadi_img)
+            break
+        except Exception:
+            continue
 
-    # Header
-    draw.text((W // 2, 44), "Dadi Ne Bola", fill=RED, font=font_header, anchor="mm")
-    draw.line([(W//2 - 90, 60), (W//2 + 90, 60)], fill=TAN, width=1)
+    # "MYDADI.IN" brand bottom-left in orange
+    draw.text((LW // 2, H - 40), "MYDADI.IN", fill=ORANGE, font=f_brand, anchor="mm")
 
-    # Clean up text: strip markdown, chapter headers, truncate
-    clean = re.sub(r'\*\*[^*]+\*\*\n\n', '', text)
-    clean = re.sub(r'\*\*|\*|#{1,3}\s?', '', clean).strip()
-    if len(clean) > 260:
-        clean = clean[:257] + "..."
+    # ── Right panel content ───────────────────────────────────────────────────
+    RX  = LW + PAD
+    RMAX = W - PAD
 
-    # Wrap and draw quote
-    lines = textwrap.wrap(clean, width=44)[:7]
-    y = 85
-    for line in lines:
-        draw.text((W // 2, y), line, fill=DARK, font=font_quote, anchor="mm")
-        y += 42
+    # "DADI AI" header top-centre of right panel
+    draw.text((LW + (W - LW) // 2, 72), "DADI AI", fill=RED, font=f_header, anchor="mm")
 
-    # Attribution + branding
-    draw.line([(W//2 - 70, H - 88), (W//2 + 70, H - 88)], fill=TAN, width=1)
-    draw.text((W // 2, H - 68), "— Pushpa Devi Sharma (Dadi)", fill=TAN, font=font_attr, anchor="mm")
-    draw.text((W // 2, H - 38), "mydadi.in", fill=RED, font=font_brand, anchor="mm")
+    cur_y = 106
+
+    # ── User bubble (white, right-aligned) ───────────────────────────────────
+    if user_clean and u_lines:
+        draw.text((RMAX, cur_y), "You", fill=TAN, font=f_label, anchor="ra")
+        cur_y += 26
+        u_fs, u_lh = 24, 36
+        u_bx = RMAX - BW
+        u_bh_inner = BPY + u_fs + (len(u_lines) - 1) * u_lh + BPY
+        # Bubble
+        draw.rounded_rectangle([u_bx, cur_y, u_bx + BW, cur_y + u_bh_inner], radius=18, fill=WHITE)
+        # Tail bottom-right
+        draw.polygon([
+            (RMAX - 18, cur_y + u_bh_inner),
+            (RMAX + 10, cur_y + u_bh_inner + 16),
+            (RMAX - 46, cur_y + u_bh_inner),
+        ], fill=WHITE)
+        # Text
+        for i, line in enumerate(u_lines):
+            draw.text((u_bx + BPX, cur_y + BPY + u_fs + i * u_lh), line, fill=DARK, font=f_user, anchor="la")
+        cur_y += u_bh_inner + 36
+
+    # ── Dadi bubble (red, left-aligned) ──────────────────────────────────────
+    draw.text((RX, cur_y), "Dadi 👵🏾", fill=TAN, font=f_label, anchor="la")
+    cur_y += 26
+    # Bubble
+    draw.rounded_rectangle([RX, cur_y, RX + BW, cur_y + d_bh], radius=18, fill=RED)
+    # Tail bottom-left
+    draw.polygon([
+        (RX + 18, cur_y + d_bh),
+        (RX - 10, cur_y + d_bh + 16),
+        (RX + 46, cur_y + d_bh),
+    ], fill=RED)
+    # Text (white)
+    for i, line in enumerate(d_lines):
+        draw.text((RX + BPX, cur_y + BPY + d_fs + i * d_lh), line, fill=WHITE, font=f_dadi, anchor="la")
+
+    # Footer "MYDADI.IN" bottom-right
+    f_footer = _try_font(22)
+    draw.text((RMAX, H - 70), "MYDADI.IN", fill=ORANGE, font=f_footer, anchor="ra")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -1870,7 +1979,7 @@ async def on_message(message: cl.Message):
         card_id = str(uuid.uuid4()).replace("-", "")
         try:
             loop = asyncio.get_event_loop()
-            png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
+            png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply, user_text)
             await _save_card(card_id, png_bytes)
             elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         except Exception as e:
@@ -2055,7 +2164,7 @@ async def on_roast_me(action: cl.Action):
     roast_elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     try:
         loop = asyncio.get_event_loop()
-        png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
+        png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast, "Roast me, Dadi!")
         await _save_card(card_id, png_bytes)
         roast_elements.append(cl.Image(url=f"/card/{card_id}", name="share_card_preview", display="inline"))
         msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
