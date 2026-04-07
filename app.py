@@ -787,13 +787,13 @@ self.addEventListener('fetch', e => {
             # Share card routes — must be handled here (before Chainlit SPA catch-all)
             if request.url.path.startswith("/card/"):
                 cid = request.url.path[len("/card/"):]
-                png = _load_card(cid)
+                png = await _load_card(cid)
                 if not png:
                     return JSONResponse({"error": "Card not found"}, status_code=404)
                 return _XMLResponse(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
             if request.url.path.startswith("/share/"):
                 cid = request.url.path[len("/share/"):]
-                png = _load_card(cid)
+                png = await _load_card(cid)
                 base = str(request.base_url).rstrip("/")
                 img_url   = f"{base}/card/{cid}"
                 share_url = f"{base}/share/{cid}"
@@ -976,7 +976,7 @@ p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}</style>
 
     @_cl_app.get("/card/{card_id}")
     async def serve_card(card_id: str):
-        png = _load_card(card_id)
+        png = await _load_card(card_id)
         if not png:
             return JSONResponse({"error": "Card not found"}, status_code=404)
         return _BinaryResponse(content=png, media_type="image/png", headers={
@@ -985,7 +985,7 @@ p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}</style>
 
     @_cl_app.get("/share/{card_id}")
     async def share_page(card_id: str, request: Request):
-        png = _load_card(card_id)
+        png = await _load_card(card_id)
         if not png:
             return JSONResponse({"error": "Card not found"}, status_code=404)
         base = str(request.base_url).rstrip("/")
@@ -1125,28 +1125,48 @@ def _pick_dadi_image(user_text: str, reply: str) -> str:
 # ─────────────────────────────────────────────
 # 9b. SHARE CARD GENERATOR
 # ─────────────────────────────────────────────
-_SHARE_CARDS: dict[str, bytes] = {}  # card_id → PNG bytes (write-through cache)
-_CARDS_DIR = "/tmp/dadi_cards"
-os.makedirs(_CARDS_DIR, exist_ok=True)
+_SHARE_CARDS: dict[str, bytes] = {}  # in-memory cache
+_SUPA_CARDS_BUCKET = "share-cards"
 
-def _save_card(card_id: str, png: bytes) -> None:
+async def _save_card(card_id: str, png: bytes) -> None:
     _SHARE_CARDS[card_id] = png
     try:
-        with open(os.path.join(_CARDS_DIR, card_id + ".png"), "wb") as f:
-            f.write(png)
+        async with httpx.AsyncClient() as client:
+            r = await client.put(
+                f"{SUPABASE_URL}/storage/v1/object/{_SUPA_CARDS_BUCKET}/{card_id}.png",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "image/png",
+                    "x-upsert": "true",
+                },
+                content=png,
+                timeout=15,
+            )
+        if r.status_code not in (200, 201):
+            print(f"[Share] Supabase upload failed: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"[Share] Disk save failed: {e}")
+        print(f"[Share] Supabase upload error: {e}")
 
-def _load_card(card_id: str) -> bytes | None:
+async def _load_card(card_id: str) -> bytes | None:
     if card_id in _SHARE_CARDS:
         return _SHARE_CARDS[card_id]
     try:
-        path = os.path.join(_CARDS_DIR, card_id + ".png")
-        with open(path, "rb") as f:
-            png = f.read()
-        _SHARE_CARDS[card_id] = png
-        return png
-    except FileNotFoundError:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/storage/v1/object/{_SUPA_CARDS_BUCKET}/{card_id}.png",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                },
+                timeout=10,
+            )
+        if r.status_code == 200:
+            _SHARE_CARDS[card_id] = r.content
+            return r.content
+        return None
+    except Exception as e:
+        print(f"[Share] Supabase fetch error: {e}")
         return None
 
 def _try_font(size: int):
@@ -1406,7 +1426,7 @@ async def on_message(message: cl.Message):
         try:
             loop = asyncio.get_event_loop()
             png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply)
-            _save_card(card_id, png_bytes)
+            await _save_card(card_id, png_bytes)
         except Exception as e:
             print(f"[Share] Card generation failed: {e}")
             card_id = ""
@@ -1514,7 +1534,7 @@ async def on_daily_optin(action: cl.Action):
 @cl.action_callback("share_card")
 async def on_share_card(action: cl.Action):
     card_id = action.payload.get("card_id", "")
-    if not card_id or not _load_card(card_id):
+    if not card_id or not await _load_card(card_id):
         await cl.Message(
             content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
             author="Dadi 👵🏾",
@@ -1587,7 +1607,7 @@ async def on_roast_me(action: cl.Action):
     try:
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
-        _save_card(card_id, png_bytes)
+        await _save_card(card_id, png_bytes)
         msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
