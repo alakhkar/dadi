@@ -375,34 +375,38 @@
     }
   }
 
-  function injectProfileButton() {
-    if (document.getElementById('dadi-profile-btn')) return;
-    const header = document.querySelector('#header') || document.querySelector('header');
-    if (!header) return;
-    const btn = document.createElement('a');
-    btn.id = 'dadi-profile-btn';
-    btn.href = '/profile';
-    btn.target = '_blank';
-    btn.rel = 'noopener';
-    btn.textContent = 'Meri Profile';
-    btn.style.cssText = (
-      'font-size:0.72rem;color:#8B1A1A;text-decoration:none;' +
-      'border:1px solid rgba(139,26,26,0.35);border-radius:999px;' +
-      'padding:3px 12px;opacity:0.85;white-space:nowrap;' +
-      'transition:opacity 0.2s,background 0.2s;'
+  /* ── Inject "Meri Profile" into Chainlit's user dropdown menu ── */
+  function injectProfileMenuItem() {
+    const menu = document.querySelector('[role="menu"]');
+    if (!menu || document.getElementById('dadi-profile-menu-item')) return;
+    // Confirm it's the user menu by checking for a logout/sign-out item
+    const hasLogout = [...menu.querySelectorAll('[role="menuitem"]')]
+      .some(el => /logout|sign.?out/i.test(el.textContent));
+    if (!hasLogout) return;
+    const item = document.createElement('a');
+    item.id = 'dadi-profile-menu-item';
+    item.href = '/profile';
+    item.target = '_blank';
+    item.rel = 'noopener';
+    item.setAttribute('role', 'menuitem');
+    item.textContent = 'Meri Profile';
+    item.style.cssText = (
+      'display:flex;align-items:center;width:100%;padding:6px 12px;' +
+      'font-size:0.875rem;color:#2d1a10;text-decoration:none;cursor:pointer;' +
+      'transition:background 0.15s;'
     );
-    btn.onmouseenter = () => { btn.style.background = 'rgba(139,26,26,0.07)'; btn.style.opacity = '1'; };
-    btn.onmouseleave = () => { btn.style.background = ''; btn.style.opacity = '0.85'; };
-    header.style.position = 'relative';
-    header.appendChild(btn);
+    item.onmouseenter = () => { item.style.background = 'rgba(139,26,26,0.07)'; };
+    item.onmouseleave = () => { item.style.background = ''; };
+    menu.insertBefore(item, menu.firstChild);
   }
+  new MutationObserver(injectProfileMenuItem)
+    .observe(document.body, { childList: true, subtree: true });
 
   function fadeOverlay() {
     overlay.style.transition = 'opacity 0.3s';
     overlay.style.opacity = '0';
     setTimeout(() => overlay.remove(), 350);
     trackChatEngagement();
-    injectProfileButton();
   }
 
   const overlayObs = new MutationObserver(() => {
