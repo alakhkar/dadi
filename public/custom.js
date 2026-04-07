@@ -376,6 +376,26 @@
   }
 
   /* ── Inject "Meri Profile" into Chainlit's user dropdown menu ── */
+  function getLoggedInEmail() {
+    // Chainlit often renders the user's identifier as plain text inside the menu
+    // or in the trigger button. Walk the menu for an email-shaped string first.
+    const menu = document.querySelector('[role="menu"]');
+    if (menu) {
+      for (const el of menu.querySelectorAll('*')) {
+        const t = el.childNodes.length === 1 && el.childNodes[0].nodeType === Node.TEXT_NODE
+          ? el.textContent.trim() : '';
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return t;
+      }
+    }
+    // Fallback: check the header user button label/title/text
+    const btn = document.querySelector('header button[aria-label], header button[title]');
+    if (btn) {
+      const candidate = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) return candidate;
+    }
+    return '';
+  }
+
   function injectProfileMenuItem() {
     const menu = document.querySelector('[role="menu"]');
     if (!menu || document.getElementById('dadi-profile-menu-item')) return;
@@ -383,9 +403,11 @@
     const hasLogout = [...menu.querySelectorAll('[role="menuitem"]')]
       .some(el => /logout|sign.?out/i.test(el.textContent));
     if (!hasLogout) return;
+    const email = getLoggedInEmail();
+    const href = email ? '/profile?email=' + encodeURIComponent(email) : '/profile';
     const item = document.createElement('a');
     item.id = 'dadi-profile-menu-item';
-    item.href = '/profile';
+    item.href = href;
     item.target = '_blank';
     item.rel = 'noopener';
     item.setAttribute('role', 'menuitem');
