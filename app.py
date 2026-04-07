@@ -780,7 +780,7 @@ self.addEventListener('fetch', e => {
             if request.url.path == "/manifest.json":
                 return JSONResponse(content=_json.loads(_MANIFEST_JSON), media_type="application/manifest+json")
             if request.url.path == "/sw.js":
-                return Response(content=_SW_JS, media_type="application/javascript")
+                return _XMLResponse(content=_SW_JS, media_type="application/javascript")
             if request.url.path == "/sitemap.xml":
                 return _XMLResponse(content=_SITEMAP_XML, media_type="application/xml")
             if request.url.path != "/auth/analytics":
