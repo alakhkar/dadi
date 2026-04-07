@@ -301,7 +301,15 @@ async def _get_ipl_match_data() -> dict | None:
             mdata = matches_resp.json()
             if mdata.get("status") == "success":
                 all_matches = mdata.get("data", [])
-                ipl_matches = [m for m in all_matches if "ipl" in m.get("name", "").lower()]
+                _ipl_kw = ("ipl", "indian premier league", "tata ipl")
+                ipl_matches = [
+                    m for m in all_matches
+                    if any(kw in m.get("name", "").lower() for kw in _ipl_kw)
+                    or any(kw in (m.get("series", "") or "").lower() for kw in _ipl_kw)
+                ]
+                # Fallback: if nothing matched by name, log all match names for debugging
+                if not ipl_matches:
+                    print("[IPL] No IPL match found. Available matches:", [m.get("name") for m in all_matches])
                 display = ipl_matches if ipl_matches else []
                 for m in display:
                     result["matches"].append({
@@ -1228,6 +1236,15 @@ setInterval(async () => {
                     "fetched_at":     int(_time.time()),
                 }
                 return JSONResponse(payload)
+            if request.url.path == "/ipl/debug":
+                # Raw CricAPI response for debugging
+                cricapi_key = os.environ.get("CRICAPI_KEY", "")
+                if not cricapi_key:
+                    return JSONResponse({"error": "CRICAPI_KEY not set"})
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    r = await client.get("https://api.cricapi.com/v1/currentMatches",
+                                         params={"apikey": cricapi_key, "offset": 0})
+                return JSONResponse(r.json())
 
             # Share card routes — must be handled here (before Chainlit SPA catch-all)
             if request.url.path.startswith("/card/"):
