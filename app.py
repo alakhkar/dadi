@@ -1207,7 +1207,7 @@ async def on_start():
             actions=[
                 cl.Action(
                     name="daily_optin",
-                    value="yes",
+                    payload={"value": "yes"},
                     label="📩 Haan Dadi, roz subah message bhejo!",
                 )
             ],
@@ -1307,7 +1307,7 @@ async def on_message(message: cl.Message):
 
             # Reuse msg — set content and Next Chapter action button
             msg.content = f"**📖 Kahani — Bhaag 1/3**\n\n{chapters[0]}"
-            msg.actions = [cl.Action(name="next_chapter", value="next", label="📖 Aage sunao, Dadi →")]
+            msg.actions = [cl.Action(name="next_chapter", payload={"value": "next"}, label="📖 Aage sunao, Dadi →")]
 
         else:
             llm_msgs = [SystemMessage(content=base_system)] + history_msgs + [HumanMessage(content=user_text)]
@@ -1352,13 +1352,13 @@ async def on_message(message: cl.Message):
         if card_id:
             action_list.append(cl.Action(
                 name="share_card",
-                value=card_id,
+                payload={"value": card_id},
                 label="🪄 Share kar — Dadi Ne Bola",
             ))
         if not is_roast_req:
             action_list.append(cl.Action(
                 name="roast_me",
-                value="roast",
+                payload={"value": "roast"},
                 label="🔥 Roast me, Dadi!",
             ))
         if action_list:
@@ -1420,7 +1420,7 @@ async def on_next_chapter(action: cl.Action):
         msg = cl.Message(
             content=f"**📖 Kahani — Bhaag {chapter_num}/3**\n\n{chapter_text}",
             author="Dadi 👵🏾",
-            actions=[cl.Action(name="next_chapter", value="next", label="📖 Aage sunao, Dadi →")],
+            actions=[cl.Action(name="next_chapter", payload={"value": "next"}, label="📖 Aage sunao, Dadi →")],
         )
 
     await msg.send()
@@ -1450,7 +1450,7 @@ async def on_daily_optin(action: cl.Action):
 
 @cl.action_callback("share_card")
 async def on_share_card(action: cl.Action):
-    card_id = action.value
+    card_id = action.payload.get("value", "")
     if not card_id or card_id not in _SHARE_CARDS:
         await cl.Message(
             content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
@@ -1525,7 +1525,7 @@ async def on_roast_me(action: cl.Action):
         loop = asyncio.get_event_loop()
         png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast)
         _SHARE_CARDS[card_id] = png_bytes
-        msg.actions = [cl.Action(name="share_card", value=card_id, label="🪄 Share kar — Dadi Ne Bola")]
+        msg.actions = [cl.Action(name="share_card", payload={"value": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
     except Exception as e:
         print(f"[Roast] Card generation failed: {e}")
 
