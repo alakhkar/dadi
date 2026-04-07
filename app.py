@@ -143,6 +143,8 @@ async def _retrieve(query: str, k: int = 3) -> list[Document]:
 
 _CRICKET_CACHE: dict = {"context": "", "ts": 0.0}
 _CRICKET_TTL   = 120  # seconds
+_IPL_DATA_CACHE: dict        = {"data": None, "ts": 0.0}
+_IPL_COMMENTARY_CACHE: dict  = {"commentary": [], "overs_snapshot": "", "ts": 0.0}
 _CRICKET_KEYWORDS = {
     "cricket", "ipl", "match", "score", "wicket", "batting", "bowling",
     "runs", "t20", "test", "odi", "innings", "over", "boundary", "six",
@@ -257,6 +259,160 @@ async def _get_cricket_context() -> str:
     except Exception as e:
         print(f"[Cricket] CricAPI failed: {e}")
         return ""
+
+
+_IPL_DADI_PROMPT = (
+    "You are Pushpa Devi Sharma, 68-year-old grandmother from Jaipur, watching IPL live on TV. "
+    "Give DEADPAN, SAVAGE reactions in 1-2 sentences MAX. "
+    "Speak Hinglish (Hindi + English mix). No emojis. No hashtags. "
+    "Reference specific player names and stats from the match data. "
+    "Return ONLY a valid JSON array of exactly 6 objects — no markdown, no backticks:\n"
+    '[{"reaction": "...", "context": "..."}]'
+)
+
+_IPL_PRESET_REACTIONS = [
+    {"reaction": "Koi baat nahi beta, haar ke bhi sikhte hain. Mera beta bhi class mein last aata tha, ab bank mein kaam karta hai.", "context": "Match update"},
+    {"reaction": "Itne paison mein toh main poora mohalla khila deti. Aur yeh log bat se ball bhi nahi maar pa rahe.", "context": "IPL auction money"},
+    {"reaction": "Stadium mein itni roshni hai. Hamare zamane mein load-shedding mein cricket khelte the, phir bhi zyada maza tha.", "context": "Night match"},
+]
+
+async def _get_ipl_match_data() -> dict | None:
+    """Fetch structured IPL match data. Cached for 120s."""
+    import time
+    cricapi_key = os.environ.get("CRICAPI_KEY", "")
+    if not cricapi_key:
+        return None
+    now = time.time()
+    if _IPL_DATA_CACHE["data"] and now - _IPL_DATA_CACHE["ts"] < _CRICKET_TTL:
+        return _IPL_DATA_CACHE["data"]
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            matches_resp, series_resp = await asyncio.gather(
+                client.get("https://api.cricapi.com/v1/currentMatches",
+                           params={"apikey": cricapi_key, "offset": 0}),
+                client.get("https://api.cricapi.com/v1/series",
+                           params={"apikey": cricapi_key, "offset": 0, "search": "IPL"}),
+                return_exceptions=True,
+            )
+
+        result: dict = {"matches": [], "points_table": []}
+
+        if not isinstance(matches_resp, Exception) and matches_resp.status_code == 200:
+            mdata = matches_resp.json()
+            if mdata.get("status") == "success":
+                all_matches = mdata.get("data", [])
+                ipl_matches = [m for m in all_matches if "ipl" in m.get("name", "").lower()]
+                display = ipl_matches if ipl_matches else []
+                for m in display:
+                    result["matches"].append({
+                        "name":   m.get("name", ""),
+                        "status": m.get("status", ""),
+                        "venue":  m.get("venue", ""),
+                        "date":   m.get("date", ""),
+                        "score":  m.get("score", []),
+                        "teams":  m.get("teams", []),
+                        "tossChoice": m.get("tossChoice", ""),
+                        "matchStarted": m.get("matchStarted", False),
+                        "matchEnded":   m.get("matchEnded", False),
+                    })
+
+        ipl_series_id = None
+        if not isinstance(series_resp, Exception) and series_resp.status_code == 200:
+            sdata = series_resp.json()
+            if sdata.get("status") == "success":
+                for s in sdata.get("data", []):
+                    if "ipl" in s.get("name", "").lower():
+                        ipl_series_id = s.get("id")
+                        break
+
+        if ipl_series_id:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                pts_resp = await client.get(
+                    "https://api.cricapi.com/v1/series_points",
+                    params={"apikey": cricapi_key, "id": ipl_series_id},
+                )
+            if pts_resp.status_code == 200:
+                pdata = pts_resp.json()
+                if pdata.get("status") == "success":
+                    for row in pdata.get("data", []):
+                        result["points_table"].append({
+                            "team": row.get("teamName") or row.get("team", ""),
+                            "p":    row.get("p") or row.get("matchesPlayed", 0),
+                            "w":    row.get("w") or row.get("win", 0),
+                            "l":    row.get("l") or row.get("loss", 0),
+                            "pts":  row.get("pts") or row.get("points", 0),
+                        })
+
+        result["fetched_at"] = int(now)
+        _IPL_DATA_CACHE["data"] = result
+        _IPL_DATA_CACHE["ts"]   = now
+        return result
+    except Exception as e:
+        print(f"[IPL] Data fetch failed: {e}")
+        return None
+
+
+async def _get_ipl_commentary(match_data: dict) -> list[dict]:
+    """Generate Dadi's IPL commentary via LLM. Cached until overs change."""
+    import time, json as _json2
+    if not match_data or not match_data.get("matches"):
+        return _IPL_PRESET_REACTIONS
+
+    # Build overs snapshot to detect score changes
+    snap_parts = []
+    for m in match_data["matches"]:
+        for s in m.get("score", []):
+            snap_parts.append(f"{s.get('inning','')[:10]}:{s.get('o','')}")
+    overs_snapshot = "|".join(snap_parts)
+
+    now = time.time()
+    if (
+        _IPL_COMMENTARY_CACHE["commentary"]
+        and _IPL_COMMENTARY_CACHE["overs_snapshot"] == overs_snapshot
+        and now - _IPL_COMMENTARY_CACHE["ts"] < 600  # 10 min max age
+    ):
+        return _IPL_COMMENTARY_CACHE["commentary"]
+
+    # Build match summary for the prompt
+    summary_lines = []
+    for m in match_data["matches"][:2]:
+        summary_lines.append(f"Match: {m['name']} — {m['status']}")
+        if m.get("venue"):
+            summary_lines.append(f"Venue: {m['venue']}")
+        for s in m.get("score", []):
+            summary_lines.append(
+                f"  {s.get('inning','')}: {s.get('r','')}/{s.get('w','')} ({s.get('o','')} ov)"
+            )
+    if match_data.get("points_table"):
+        summary_lines.append("IPL Points Table (top 5):")
+        for row in match_data["points_table"][:5]:
+            summary_lines.append(f"  {row['team']}: P{row['p']} W{row['w']} L{row['l']} Pts{row['pts']}")
+
+    match_summary = "\n".join(summary_lines)
+
+    try:
+        from langchain_core.messages import SystemMessage, HumanMessage
+        llm_msgs = [
+            SystemMessage(content=_IPL_DADI_PROMPT),
+            HumanMessage(content=f"Live match data:\n{match_summary}\n\nGenerate 6 reactions. Return ONLY JSON array."),
+        ]
+        result = await asyncio.wait_for(LLM.ainvoke(llm_msgs), timeout=30.0)
+        text = result.content.strip()
+        # Strip markdown fences if present
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = _json2.loads(text.strip())
+        if isinstance(parsed, list) and parsed:
+            _IPL_COMMENTARY_CACHE["commentary"]      = parsed
+            _IPL_COMMENTARY_CACHE["overs_snapshot"]  = overs_snapshot
+            _IPL_COMMENTARY_CACHE["ts"]              = now
+            return parsed
+    except Exception as e:
+        print(f"[IPL] Commentary LLM failed: {e}")
+
+    return _IPL_COMMENTARY_CACHE["commentary"] or _IPL_PRESET_REACTIONS
 
 
 async def _web_search(query: str, max_results: int = 3) -> list[dict]:
@@ -771,7 +927,275 @@ self.addEventListener('fetch', e => {
     <xhtml:link rel="alternate" hreflang="en" href="https://www.mydadi.in/"/>
     <xhtml:link rel="alternate" hreflang="hi" href="https://www.mydadi.in/"/>
   </url>
+  <url>
+    <loc>https://www.mydadi.in/ipl</loc>
+    <lastmod>2026-04-08</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>"""
+
+    _IPL_PAGE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dadi ka IPL — mydadi.in</title>
+<meta name="description" content="Live IPL scores with Dadi's deadpan Hinglish commentary. She will roast your favourite team.">
+<meta property="og:title" content="Dadi ka IPL">
+<meta property="og:description" content="Live IPL commentary your grandmother never asked for.">
+<meta property="og:url" content="https://www.mydadi.in/ipl">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0A0A0A;font-family:'DM Sans',sans-serif;color:#fff;min-height:100vh}
+.hero{background:linear-gradient(180deg,#7F1D1D 0%,#450a0a 60%,#0A0A0A 100%);padding:40px 20px 60px;text-align:center;position:relative;overflow:hidden}
+.live-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);border-radius:100px;padding:6px 16px;margin-bottom:16px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1.5s infinite}
+.live-text{font-size:12px;color:#FBBF24;font-weight:600;letter-spacing:1px}
+h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 0 4px;line-height:1.2}
+.subtitle{font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 24px}
+.scoreboard{background:rgba(255,255,255,0.06);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:20px 24px;max-width:420px;margin:0 auto}
+.scores{display:flex;justify-content:space-between;align-items:center}
+.team-name{font-size:28px;font-weight:800}
+.team-score{font-size:22px;font-weight:700;margin-top:2px}
+.team-overs{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px}
+.vs{font-size:13px;font-weight:700;color:rgba(255,255,255,0.3);padding:4px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:8px}
+.match-status{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;color:#EF4444;font-weight:600}
+.match-venue{font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px}
+.match-name-display{font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px;font-weight:500}
+.content{padding:0 16px 40px;max-width:500px;margin:0 auto}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:-30px 0 20px}
+.section-title{font-family:'Tiro Devanagari Hindi',serif;font-size:22px;color:#fff}
+.refresh-btn{padding:8px 16px;border-radius:10px;border:none;background:#FBBF24;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
+.refresh-btn:disabled{background:rgba(251,191,36,0.2);color:#FBBF24;cursor:default}
+.reactions{display:flex;flex-direction:column;gap:12px}
+.reaction-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px 20px;cursor:pointer;transition:all 0.2s}
+.reaction-card:hover{background:rgba(255,255,255,0.08);border-color:rgba(251,191,36,0.3)}
+.reaction-context{font-size:10px;font-weight:700;color:#FBBF24;letter-spacing:0.5px;margin-bottom:8px;text-transform:uppercase}
+.reaction-text{font-family:'Tiro Devanagari Hindi',serif;font-size:16px;line-height:1.7;color:rgba(255,255,255,0.9)}
+.copy-hint{font-size:10px;color:rgba(255,255,255,0.25);margin-top:10px;display:flex;align-items:center;gap:4px}
+.highlights{margin-top:32px}
+.highlights h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:0 0 14px}
+.highlights-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.highlight-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:14px 16px}
+.hl-label{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:4px}
+.hl-value{font-size:22px;font-weight:800}
+.hl-sub{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px}
+.points-table{margin-top:24px}
+.points-table h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:0 0 14px}
+.pt-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:6px;font-size:13px}
+.pt-team{font-weight:600;color:rgba(255,255,255,0.9)}
+.pt-stats{color:rgba(255,255,255,0.4);font-size:12px}
+.pt-pts{font-weight:700;color:#FBBF24;min-width:30px;text-align:right}
+.cta-box{margin-top:32px;background:linear-gradient(135deg,rgba(251,191,36,0.1),rgba(251,191,36,0.05));border:1px solid rgba(251,191,36,0.2);border-radius:16px;padding:24px 20px;text-align:center}
+.cta-box h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:12px 0 6px}
+.cta-box p{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;line-height:1.5}
+.cta-link{display:inline-block;padding:12px 28px;border-radius:10px;background:#FBBF24;color:#1a1a1a;text-decoration:none;font-weight:700;font-size:14px}
+.footer{text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(255,255,255,0.2)}
+.error-box{padding:20px;text-align:center;color:rgba(255,255,255,0.4);font-size:14px;margin:20px 0}
+.loading-box{padding:20px;text-align:center;color:#FBBF24;font-size:14px}
+.no-match-box{padding:40px 20px;text-align:center}
+.no-match-box p{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:rgba(255,255,255,0.7);line-height:1.6}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#16A34A;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="live-badge">
+    <div class="live-dot" id="live-dot"></div>
+    <span class="live-text" id="live-text">IPL 2026</span>
+  </div>
+  <h1>Dadi ka IPL</h1>
+  <p class="subtitle">Cricket commentary your grandmother never asked for</p>
+  <div class="scoreboard" id="scoreboard">
+    <div class="loading-box">Dadi TV on kar rahi hai...</div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="section-header">
+    <h2 class="section-title">&#x1F475;&#x1F3FE; Dadi bol rahi hai...</h2>
+    <button class="refresh-btn" id="refresh-btn" onclick="refreshData()">Aur sunao</button>
+  </div>
+  <div class="reactions" id="reactions">
+    <div class="loading-box">Dadi soch rahi hai...</div>
+  </div>
+  <div id="highlights-section"></div>
+  <div id="points-section"></div>
+  <div class="cta-box">
+    <div style="font-size:28px">&#x1F475;&#x1F3FE;</div>
+    <h3>Dadi se baat karo</h3>
+    <p>IPL hi nahi, life ke baare mein bhi Dadi ke paas opinion hai</p>
+    <a href="/" class="cta-link">Chat with Dadi &rarr;</a>
+  </div>
+  <div class="footer">mydadi.in &bull; Dadi AI &bull; Made with pyaar &amp; thoda masala</div>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+let lastOversSnapshot = '';
+let isRefreshing = false;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function copyReaction(text, context) {
+  const full = '"' + text + '" — Dadi on ' + context + '\\n\\nmydadi.in/ipl';
+  navigator.clipboard.writeText(full).then(() => showToast('WhatsApp ke liye copy ho gaya!')).catch(() => showToast('Copy failed'));
+}
+
+function renderScoreboard(data) {
+  const sb = document.getElementById('scoreboard');
+  const liveDot = document.getElementById('live-dot');
+  const liveText = document.getElementById('live-text');
+
+  if (!data.matches || !data.matches.length) {
+    sb.innerHTML = '<div class="no-match-box"><p>Abhi koi IPL match nahi chal raha.<br>Dadi chai pi rahi hain.</p></div>';
+    liveDot.style.background = '#6B7280';
+    liveText.textContent = 'IPL 2026';
+    return;
+  }
+
+  const m = data.matches[0];
+  const teams = m.teams || [];
+  const scores = m.score || [];
+  const isLive = m.matchStarted && !m.matchEnded;
+
+  liveDot.style.background = isLive ? '#EF4444' : '#6B7280';
+  liveText.textContent = isLive ? 'LIVE \u2022 IPL 2026' : 'IPL 2026';
+
+  // Map score by innings
+  const scoreMap = {};
+  scores.forEach(s => {
+    const inning = s.inning || '';
+    const teamCode = inning.split(' ')[0];
+    scoreMap[teamCode] = s;
+  });
+
+  const t1 = teams[0] || 'Team 1';
+  const t2 = teams[1] || 'Team 2';
+  const s1 = scoreMap[t1] || scoreMap[Object.keys(scoreMap)[0]] || {};
+  const s2 = scoreMap[t2] || scoreMap[Object.keys(scoreMap)[1]] || {};
+
+  const fmt = (s) => s.r !== undefined ? s.r + '/' + s.w : '--';
+  const overs = (s) => s.o !== undefined ? '(' + s.o + ' ov)' : '';
+  const col1 = scores.length > 0 ? '#FBBF24' : 'rgba(255,255,255,0.6)';
+  const col2 = scores.length > 1 ? '#EF4444' : 'rgba(255,255,255,0.6)';
+
+  sb.innerHTML = `
+    <div class="scores">
+      <div style="text-align:left">
+        <div class="team-name">${t1}</div>
+        <div class="team-score" style="color:${col1}">${fmt(s1)}</div>
+        <div class="team-overs">${overs(s1)}</div>
+      </div>
+      <div class="vs">vs</div>
+      <div style="text-align:right">
+        <div class="team-name">${t2}</div>
+        <div class="team-score" style="color:${col2}">${fmt(s2)}</div>
+        <div class="team-overs">${overs(s2)}</div>
+      </div>
+    </div>
+    <div class="match-name-display">${m.name || ''}</div>
+    <div class="match-status">${m.status || ''}</div>
+    <div class="match-venue">${m.venue || ''}</div>
+  `;
+}
+
+function renderReactions(commentary) {
+  const el = document.getElementById('reactions');
+  if (!commentary || !commentary.length) {
+    el.innerHTML = '<div class="error-box">Dadi abhi kuch nahi bol rahi. Thodi der mein aao.</div>';
+    return;
+  }
+  el.innerHTML = commentary.map(r => `
+    <div class="reaction-card" onclick="copyReaction(${JSON.stringify(r.reaction)}, ${JSON.stringify(r.context)})">
+      <div class="reaction-context">${r.context || ''}</div>
+      <div class="reaction-text">"${r.reaction || ''}"</div>
+      <div class="copy-hint"><span>Tap to copy for WhatsApp</span><span style="font-size:12px">\u2192</span></div>
+    </div>
+  `).join('');
+}
+
+function renderPointsTable(table) {
+  const el = document.getElementById('points-section');
+  if (!table || !table.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="points-table">
+      <h3>IPL Points Table</h3>
+      ${table.slice(0, 10).map(r => `
+        <div class="pt-row">
+          <span class="pt-team">${r.team}</span>
+          <span class="pt-stats">P${r.p} W${r.w} L${r.l}</span>
+          <span class="pt-pts">${r.pts} pts</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function fetchData(force) {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Soch rahi hai...';
+  isRefreshing = true;
+
+  try {
+    const url = '/ipl/data' + (force ? '?force=1' : '');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+
+    renderScoreboard(data);
+    renderReactions(data.commentary);
+    renderPointsTable(data.points_table);
+
+    lastOversSnapshot = data.overs_snapshot || '';
+  } catch(e) {
+    console.error('[IPL]', e);
+    document.getElementById('reactions').innerHTML = '<div class="error-box">Network error. Dadi ka signal thoda weak hai.</div>';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Aur sunao';
+  isRefreshing = false;
+}
+
+function refreshData() { fetchData(true); }
+
+// Initial load
+fetchData(false);
+
+// Auto-refresh every 2 minutes; only re-render if overs changed
+setInterval(async () => {
+  if (isRefreshing) return;
+  try {
+    const res = await fetch('/ipl/data');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.overs_snapshot !== lastOversSnapshot) {
+      renderScoreboard(data);
+      renderReactions(data.commentary);
+      renderPointsTable(data.points_table);
+      lastOversSnapshot = data.overs_snapshot || '';
+    } else {
+      // Still update scoreboard status (might have changed without overs changing)
+      renderScoreboard(data);
+    }
+  } catch(e) {}
+}, 120000);
+</script>
+</body>
+</html>"""
 
     from starlette.responses import Response as _XMLResponse
 
@@ -783,6 +1207,27 @@ self.addEventListener('fetch', e => {
                 return _XMLResponse(content=_SW_JS, media_type="application/javascript")
             if request.url.path == "/sitemap.xml":
                 return _XMLResponse(content=_SITEMAP_XML, media_type="application/xml")
+
+            # IPL page — must be before Chainlit SPA catch-all
+            if request.url.path == "/ipl":
+                return _HTMLResponse(_IPL_PAGE_HTML)
+            if request.url.path == "/ipl/data":
+                import time as _time, json as _json3
+                match_data = await _get_ipl_match_data()
+                commentary = await _get_ipl_commentary(match_data or {})
+                snap_parts = []
+                if match_data:
+                    for m in match_data.get("matches", []):
+                        for s in m.get("score", []):
+                            snap_parts.append(f"{s.get('inning','')[:10]}:{s.get('o','')}")
+                payload = {
+                    "matches":        (match_data or {}).get("matches", []),
+                    "points_table":   (match_data or {}).get("points_table", []),
+                    "commentary":     commentary,
+                    "overs_snapshot": "|".join(snap_parts),
+                    "fetched_at":     int(_time.time()),
+                }
+                return JSONResponse(payload)
 
             # Share card routes — must be handled here (before Chainlit SPA catch-all)
             if request.url.path.startswith("/card/"):
