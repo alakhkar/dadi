@@ -82,6 +82,16 @@ elif LLM_PROVIDER == "deepseek":
         streaming=True,
     )
     print("[LLM] Using DeepSeek-V3 via HuggingFace router (novita)")
+elif LLM_PROVIDER == "gemma":
+    from langchain_openai import ChatOpenAI
+    LLM = ChatOpenAI(
+        model="google/gemma-4-31B-it:novita",
+        api_key=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
+        base_url="https://router.huggingface.co/v1",
+        temperature=0.8,
+        streaming=True,
+    )
+    print("[LLM] Using Gemma-4-31B-it via HuggingFace router (novita)")
 else:
     LLM = ChatGroq(
         model="llama-3.3-70b-versatile",
