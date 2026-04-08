@@ -1372,38 +1372,48 @@ function _roundRect(ctx, x, y, w, h, r) {
   new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
   injectShareButtons();
 
-  /* ── Intercept "Share kar — Dadi Ne Bola" Chainlit action button ── */
-  document.addEventListener('click', function(e) {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const txt = (btn.textContent || btn.innerText || '').trim();
-    if (!txt.includes('Share kar') && !txt.includes('Share Kar')) return;
+  /* ── Override "Share kar — Dadi Ne Bola" Chainlit action button ── */
+  const _interceptedShareKarBtns = new WeakSet();
 
-    e.stopImmediatePropagation();
-    e.preventDefault();
+  function _interceptShareKarButtons() {
+    document.querySelectorAll('button').forEach(btn => {
+      if (_interceptedShareKarBtns.has(btn)) return;
+      const txt = (btn.textContent || btn.innerText || '').trim();
+      if (!txt.includes('Share kar') && !txt.includes('Share Kar')) return;
 
-    // Walk up to find the article the button lives inside
-    let article = null;
-    let el = btn.parentElement;
-    for (let i = 0; i < 20 && el && el !== document.body; i++) {
-      if (el.getAttribute && el.getAttribute('role') === 'article') { article = el; break; }
-      el = el.parentElement;
-    }
+      _interceptedShareKarBtns.add(btn);
 
-    // Fallback: nearest preceding article in DOM order
-    if (!article) {
-      const all = Array.from(document.querySelectorAll('[role="article"]'));
-      for (let i = all.length - 1; i >= 0; i--) {
-        if (all[i].compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) {
-          article = all[i]; break;
+      // Attach directly to the button in capture phase — fires before React
+      btn.addEventListener('click', function(e) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+
+        // Find the article (Dadi's message) that owns this button
+        let article = null;
+        let el = btn.parentElement;
+        for (let i = 0; i < 20 && el && el !== document.body; i++) {
+          if (el.getAttribute && el.getAttribute('role') === 'article') { article = el; break; }
+          el = el.parentElement;
         }
-      }
-    }
+        // Fallback: nearest preceding article in DOM order
+        if (!article) {
+          const all = Array.from(document.querySelectorAll('[role="article"]'));
+          for (let i = all.length - 1; i >= 0; i--) {
+            if (all[i].compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) {
+              article = all[i]; break;
+            }
+          }
+        }
+        if (!article) return;
 
-    if (!article) return;
+        const dadiText = (article.innerText || article.textContent || '').trim();
+        const userText = findUserMessageForArticle(article);
+        showShareModal(dadiText, userText);
+      }, true); // capture phase
+    });
+  }
 
-    const dadiText = (article.innerText || article.textContent || '').trim();
-    showMemeModal(dadiText);
-  }, true); // capture phase — fires before React processes the click
+  new MutationObserver(_interceptShareKarButtons).observe(document.body, { childList: true, subtree: true });
+  _interceptShareKarButtons();
 
 })();
