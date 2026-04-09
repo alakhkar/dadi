@@ -2025,23 +2025,7 @@ async def on_message(message: cl.Message):
     is_error     = full_reply.startswith("*Arre!* Something")
     is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
     if not is_story_msg and not is_error:
-        # Generate share card in background (not shown inline — only on button click)
-        card_id = str(uuid.uuid4()).replace("-", "")
-        try:
-            loop = asyncio.get_event_loop()
-            png_bytes = await loop.run_in_executor(None, _generate_share_card, full_reply, user_text)
-            await _save_card(card_id, png_bytes)
-        except Exception as e:
-            print(f"[Share] Card generation failed: {e}")
-            card_id = ""
-
         action_list = []
-        if card_id:
-            action_list.append(cl.Action(
-                name="share_card",
-                payload={"card_id": card_id},
-                label="🪄 Share kar — Dadi Ne Bola",
-            ))
         if not is_roast_req:
             action_list.append(cl.Action(
                 name="roast_me",
@@ -2137,35 +2121,6 @@ async def on_daily_optin(action: cl.Action):
     await action.remove()
 
 
-@cl.action_callback("share_card")
-async def on_share_card(action: cl.Action):
-    card_id = action.payload.get("card_id", "")
-    if not card_id or not await _load_card(card_id):
-        await cl.Message(
-            content="Arre beta, card nahi mila. Koi baat nahi — dobara pooch!",
-            author="Dadi 👵🏾",
-        ).send()
-        await action.remove()
-        return
-
-    base = "https://www.mydadi.in"
-
-    share_url = f"{base}/share/{card_id}"
-    card_url  = f"{base}/card/{card_id}"
-
-    await cl.Message(
-        content=(
-            f"Le beta, tera Dadi ka card ready hai! 🪄\n\n"
-            f"**Share link:** {share_url}\n\n"
-            f"Yeh link WhatsApp, Instagram story, ya X pe share kar — "
-            f"log poochhenge 'yeh Dadi kaun hai?' and that's the plan. 😄"
-        ),
-        author="Dadi 👵🏾",
-        elements=[cl.Image(url=card_url, name="share_preview", display="inline")],
-    ).send()
-    await action.remove()
-
-
 @cl.action_callback("roast_me")
 async def on_roast_me(action: cl.Action):
     messages = cl.user_session.get("messages", [])
@@ -2207,16 +2162,6 @@ async def on_roast_me(action: cl.Action):
     except Exception as e:
         full_roast = "Arre beta, roast karte karte mujhe khud hi ghabrahat ho gayi. Phir aana. 😂"
         await msg.stream_token(full_roast)
-
-    # Generate share card for the roast (not shown inline — only on button click)
-    card_id = str(uuid.uuid4()).replace("-", "")
-    try:
-        loop = asyncio.get_event_loop()
-        png_bytes = await loop.run_in_executor(None, _generate_share_card, full_roast, "Roast me, Dadi!")
-        await _save_card(card_id, png_bytes)
-        msg.actions = [cl.Action(name="share_card", payload={"card_id": card_id}, label="🪄 Share kar — Dadi Ne Bola")]
-    except Exception as e:
-        print(f"[Roast] Card generation failed: {e}")
 
     msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     await msg.update()
