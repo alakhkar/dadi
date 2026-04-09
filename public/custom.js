@@ -1030,47 +1030,43 @@
   injectShareButtons();
 
   /* ── Roast me button next to attach icon in input area ── */
-  let _roastBtnInjected = false;
-
   function injectRoastButton() {
-    if (isLoginPage() || _roastBtnInjected) return;
+    if (isLoginPage() || document.querySelector('.dadi-roast-btn')) return;
 
-    // The attach/upload button is an <input type="file"> or a label next to the textarea
-    // Chainlit renders an upload icon button inside the input footer — find the form area
     const textarea = document.querySelector('textarea');
     if (!textarea) return;
 
-    // Walk up to find the form/footer container that also holds the upload button
-    let container = textarea.parentElement;
-    for (let i = 0; i < 6 && container; i++) {
-      // The container that holds both the textarea and the action buttons
-      if (container.querySelector('button[type="submit"], button[aria-label]') &&
-          container.contains(textarea)) break;
-      container = container.parentElement;
+    // Walk up from textarea to the flex row that holds the bottom action buttons
+    // Chainlit structure: textarea > div > div (flex row with buttons)
+    // We want the sibling row below/around the textarea that has the submit button
+    let btnRow = null;
+    let el = textarea.parentElement;
+    for (let i = 0; i < 8 && el; i++) {
+      // Look for a sibling or child that is a flex container with buttons
+      const siblings = Array.from(el.parentElement?.children || []);
+      for (const sib of siblings) {
+        if (sib === el) continue;
+        if (sib.querySelector('button') && !sib.contains(textarea)) {
+          btnRow = sib;
+          break;
+        }
+      }
+      if (btnRow) break;
+      el = el.parentElement;
     }
-    if (!container) return;
-
-    // Find the upload/attach button (Chainlit uses a label wrapping an input[type=file])
-    const attachLabel = container.querySelector('label[for], input[type="file"]')?.closest('label') ||
-                        container.querySelector('input[type="file"]')?.parentElement;
-    if (!attachLabel || container.querySelector('.dadi-roast-btn')) return;
-
-    _roastBtnInjected = true;
+    if (!btnRow) return;
 
     const roastBtn = document.createElement('button');
     roastBtn.className = 'dadi-roast-btn';
     roastBtn.type = 'button';
-    roastBtn.title = 'Roast me, Dadi!';
-    roastBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;flex-shrink:0;';
+    roastBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;flex-shrink:0;align-self:center;';
     roastBtn.textContent = '🔥 Roast me, Dadi!';
     roastBtn.onclick = () => {
       const ta = document.querySelector('textarea');
       if (!ta) return;
-      // Set value and dispatch React-compatible input event
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      nativeInputValueSetter.call(ta, 'Roast me, Dadi!');
+      const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      nativeSet.call(ta, 'Roast me, Dadi!');
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      // Submit the form
       setTimeout(() => {
         const form = ta.closest('form');
         const submitBtn = form?.querySelector('button[type="submit"]');
@@ -1079,7 +1075,7 @@
       }, 50);
     };
 
-    attachLabel.insertAdjacentElement('afterend', roastBtn);
+    btnRow.appendChild(roastBtn);
   }
 
   new MutationObserver(injectRoastButton).observe(document.body, { childList: true, subtree: true });
