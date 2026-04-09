@@ -1366,48 +1366,46 @@ function _roundRect(ctx, x, y, w, h, r) {
   new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
   injectShareButtons();
 
-  /* ── Override "Share kar — Dadi Ne Bola" Chainlit action button ── */
-  const _interceptedShareKarBtns = new WeakSet();
+  /* ── Replace "Share kar — Dadi Ne Bola" button with canvas-based version ── */
+  const _replacedShareKarBtns = new WeakSet();
 
-  function _interceptShareKarButtons() {
+  function _replaceShareKarButtons() {
     document.querySelectorAll('button').forEach(btn => {
-      if (_interceptedShareKarBtns.has(btn)) return;
+      if (_replacedShareKarBtns.has(btn)) return;
       const txt = (btn.textContent || btn.innerText || '').trim();
       if (!txt.includes('Share kar') && !txt.includes('Share Kar')) return;
 
-      _interceptedShareKarBtns.add(btn);
+      _replacedShareKarBtns.add(btn);
 
-      // Attach directly to the button in capture phase — fires before React
-      btn.addEventListener('click', function(e) {
-        e.stopImmediatePropagation();
-        e.preventDefault();
+      // Find the nearest preceding article (Dadi's message)
+      function findArticle() {
+        const all = Array.from(document.querySelectorAll('[role="article"]'));
+        for (let i = all.length - 1; i >= 0; i--) {
+          if (all[i].compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) return all[i];
+        }
+        return null;
+      }
 
-        // Find the article (Dadi's message) that owns this button
-        let article = null;
-        let el = btn.parentElement;
-        for (let i = 0; i < 20 && el && el !== document.body; i++) {
-          if (el.getAttribute && el.getAttribute('role') === 'article') { article = el; break; }
-          el = el.parentElement;
-        }
-        // Fallback: nearest preceding article in DOM order
-        if (!article) {
-          const all = Array.from(document.querySelectorAll('[role="article"]'));
-          for (let i = all.length - 1; i >= 0; i--) {
-            if (all[i].compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) {
-              article = all[i]; break;
-            }
-          }
-        }
+      // Create a replacement button that looks identical but calls canvas modal
+      const clone = document.createElement('button');
+      clone.className = btn.className;
+      clone.style.cssText = btn.style.cssText;
+      clone.innerHTML = btn.innerHTML;
+      clone.onclick = e => {
+        e.stopPropagation();
+        const article = findArticle();
         if (!article) return;
-
         const dadiText = (article.innerText || article.textContent || '').trim();
         const userText = findUserMessageForArticle(article);
         showShareModal(dadiText, userText);
-      }, true); // capture phase
+      };
+
+      // Swap — the original button (with React's handler) is removed from DOM
+      btn.parentNode.replaceChild(clone, btn);
     });
   }
 
-  new MutationObserver(_interceptShareKarButtons).observe(document.body, { childList: true, subtree: true });
-  _interceptShareKarButtons();
+  new MutationObserver(_replaceShareKarButtons).observe(document.body, { childList: true, subtree: true });
+  _replaceShareKarButtons();
 
 })();
