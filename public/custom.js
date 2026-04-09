@@ -1012,14 +1012,11 @@
 
       _decoratedBars.add(bar);
 
-      const existingBtn = bar.querySelector('button.h-9:not(.dadi-share-btn):not(.dadi-meme-btn)');
-      const btnCls  = existingBtn ? existingBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
-
-// Meme button
+      // Meme button
       const memeBtn = document.createElement('button');
-      memeBtn.className = btnCls + 'dadi-meme-btn';
-      memeBtn.title = 'Make a meme';
-      memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
+      memeBtn.className = 'dadi-meme-btn';
+      memeBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;';
+      memeBtn.textContent = '🪄 Share Kar - Dadi ne bola';
       memeBtn.onclick = e => {
         e.stopPropagation();
         showMemeModal((article.innerText || article.textContent || '').trim());
