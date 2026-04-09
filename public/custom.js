@@ -1353,13 +1353,7 @@ function _roundRect(ctx, x, y, w, h, r) {
       const memeBtn = document.createElement('button');
       memeBtn.className = btnCls + 'dadi-meme-btn';
       memeBtn.title = 'Make a meme';
-      memeBtn.innerHTML =
-        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${svgCls}">` +
-          '<circle cx="12" cy="12" r="10"/>' +
-          '<path d="M8 13s1.5 2 4 2 4-2 4-2"/>' +
-          '<line x1="9" y1="9" x2="9.01" y2="9"/>' +
-          '<line x1="15" y1="9" x2="15.01" y2="9"/>' +
-        '</svg>';
+      memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
       memeBtn.onclick = e => {
         e.stopPropagation();
         showMemeModal((article.innerText || article.textContent || '').trim());
