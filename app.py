@@ -2024,17 +2024,6 @@ async def on_message(message: cl.Message):
     is_story_msg = _is_story_request(user_text)
     is_error     = full_reply.startswith("*Arre!* Something")
     is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
-    if not is_story_msg and not is_error:
-        action_list = []
-        if not is_roast_req:
-            action_list.append(cl.Action(
-                name="roast_me",
-                payload={"value": "roast"},
-                label="🔥 Roast me, Dadi!",
-            ))
-        if action_list:
-            msg.actions = action_list
-
     msg.elements = elements
 
     await msg.update()
