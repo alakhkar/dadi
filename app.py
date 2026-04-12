@@ -1395,7 +1395,7 @@ function renderReactions(commentary) {
     return;
   }
   el.innerHTML = commentary.map(r => `
-    <div class="reaction-card" onclick="shareReaction(${JSON.stringify(r.reaction)}, ${JSON.stringify(r.context)})">
+    <div class="reaction-card" onclick="shareReaction(${JSON.stringify(r.reaction).replace(/"/g, '&quot;')}, ${JSON.stringify(r.context).replace(/"/g, '&quot;')})">
       <div class="reaction-context">${r.context || ''}</div>
       <div class="reaction-text">"${r.reaction || ''}"</div>
       <div class="copy-hint"><span style="color:#FBBF24;font-weight:600;">&#x1F4F2; Tap to share as image</span><span style="font-size:12px">\u2192</span></div>
