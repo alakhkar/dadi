@@ -317,6 +317,16 @@ async def _get_ipl_match_data() -> dict | None:
 
         result: dict = {"matches": [], "points_table": []}
 
+        # Extract series_id first so we can use it as a reliable match filter
+        ipl_series_id = None
+        if not isinstance(series_resp, Exception) and series_resp.status_code == 200:
+            sdata = series_resp.json()
+            if sdata.get("status") == "success":
+                for s in sdata.get("data", []):
+                    if "ipl" in s.get("name", "").lower():
+                        ipl_series_id = s.get("id")
+                        break
+
         if not isinstance(matches_resp, Exception) and matches_resp.status_code == 200:
             mdata = matches_resp.json()
             if mdata.get("status") == "success":
@@ -326,12 +336,11 @@ async def _get_ipl_match_data() -> dict | None:
                     m for m in all_matches
                     if any(kw in m.get("name", "").lower() for kw in _ipl_kw)
                     or any(kw in (m.get("series", "") or "").lower() for kw in _ipl_kw)
+                    or (ipl_series_id and m.get("series_id") == ipl_series_id)
                 ]
-                # Fallback: if nothing matched by name, log all match names for debugging
                 if not ipl_matches:
                     print("[IPL] No IPL match found. Available matches:", [m.get("name") for m in all_matches])
-                display = ipl_matches if ipl_matches else []
-                for m in display:
+                for m in ipl_matches:
                     result["matches"].append({
                         "name":   m.get("name", ""),
                         "status": m.get("status", ""),
@@ -344,15 +353,6 @@ async def _get_ipl_match_data() -> dict | None:
                         "matchEnded":   m.get("matchEnded", False),
                     })
 
-        ipl_series_id = None
-        if not isinstance(series_resp, Exception) and series_resp.status_code == 200:
-            sdata = series_resp.json()
-            if sdata.get("status") == "success":
-                for s in sdata.get("data", []):
-                    if "ipl" in s.get("name", "").lower():
-                        ipl_series_id = s.get("id")
-                        break
-
         if ipl_series_id:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 pts_resp = await client.get(
@@ -363,12 +363,14 @@ async def _get_ipl_match_data() -> dict | None:
                 pdata = pts_resp.json()
                 if pdata.get("status") == "success":
                     for row in pdata.get("data", []):
+                        w = next((row[k] for k in ("w", "win", "wins") if k in row), 0)
+                        nr = next((row[k] for k in ("nr", "noResult") if k in row), 0)
                         result["points_table"].append({
-                            "team": next((row[k] for k in ("teamName", "team") if k in row), ""),
+                            "team": next((row[k] for k in ("teamname", "teamName", "team") if k in row), ""),
                             "p":    next((row[k] for k in ("p", "matchesPlayed", "matches", "played") if k in row), 0),
-                            "w":    next((row[k] for k in ("w", "win", "wins") if k in row), 0),
+                            "w":    w,
                             "l":    next((row[k] for k in ("l", "loss", "losses") if k in row), 0),
-                            "pts":  next((row[k] for k in ("pts", "points") if k in row), 0),
+                            "pts":  next((row[k] for k in ("pts", "points") if k in row), w * 2 + nr),
                             "nrr":  next((row[k] for k in ("nrr", "netRunRate") if k in row), None),
                         })
 
@@ -1175,7 +1177,7 @@ async function generateIPLShareCard(dadiText, context, scoreData) {
     const scores = m.score || [];
     const t1 = teams[0] || '', t2 = teams[1] || '';
     const scoreMap = {};
-    scores.forEach(s => { const k = (s.inning || '').split(' ')[0]; scoreMap[k] = s; });
+    scores.forEach(s => { const inning = (s.inning || '').toLowerCase(); const matched = teams.find(t => inning.startsWith(t.toLowerCase())); scoreMap[matched || s.inning.split(' ')[0]] = s; });
     const s1 = scoreMap[t1] || scores[0] || {};
     const s2 = scoreMap[t2] || scores[1] || {};
     const fmt = s => s.r !== undefined ? s.r + '/' + s.w : '--';
@@ -1342,12 +1344,12 @@ function renderScoreboard(data) {
   liveDot.style.background = isLive ? '#EF4444' : '#6B7280';
   liveText.textContent = isLive ? 'LIVE \u2022 IPL 2026' : 'IPL 2026';
 
-  // Map score by innings
+  // Map score by innings — match full team name prefix first
   const scoreMap = {};
   scores.forEach(s => {
-    const inning = s.inning || '';
-    const teamCode = inning.split(' ')[0];
-    scoreMap[teamCode] = s;
+    const inning = (s.inning || '').toLowerCase();
+    const matched = teams.find(t => inning.startsWith(t.toLowerCase()));
+    scoreMap[matched || s.inning.split(' ')[0]] = s;
   });
 
   const t1 = teams[0] || 'Team 1';
