@@ -332,6 +332,8 @@ async def _get_ipl_match_data() -> dict | None:
             mdata = matches_resp.json()
             if mdata.get("status") == "success":
                 all_matches = mdata.get("data", [])
+                print(f"[IPL] currentMatches returned {len(all_matches)} matches: {[m.get('name') for m in all_matches]}")
+                print(f"[IPL] ipl_series_id={ipl_series_id}; match series_ids={[m.get('series_id') or m.get('seriesId') for m in all_matches]}")
                 _ipl_kw = ("ipl", "indian premier league", "tata ipl")
                 ipl_matches = [
                     m for m in all_matches
@@ -362,6 +364,7 @@ async def _get_ipl_match_data() -> dict | None:
                 )
             if pts_resp.status_code == 200:
                 pdata = pts_resp.json()
+                print(f"[IPL] series_points status={pdata.get('status')}, rows={len(pdata.get('data', []))}, sample={pdata.get('data', [{}])[:1]}")
                 if pdata.get("status") == "success":
                     for row in pdata.get("data", []):
                         w = next((row[k] for k in ("w", "win", "wins") if k in row), 0)
