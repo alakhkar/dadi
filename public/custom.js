@@ -1241,54 +1241,51 @@
   }
 
   /* ── Inject meme + share buttons into Dadi messages ── */
-  // Meme: injected immediately when article appears (no action bar needed).
-  // Share: waits until Chainlit's copy/like/dislike buttons are present in the
-  //        action bar, then sits next to them. MutationObserver keeps retrying
-  //        until they appear (they're added after streaming finishes).
+  // Meme: every Dadi article, immediately.
+  // Share: only in the Chainlit action bar (the exact .-ml-1.5 container that
+  //        holds copy/like/dislike). No fallback — if that bar isn't present yet
+  //        the MutationObserver will retry when Chainlit adds it.
   const _memeInjected  = new WeakSet();
   const _shareInjected = new WeakSet();
 
+  function _isDadiArticle(article) {
+    if (isUserArticle(article)) return false;
+    // Skip articles inside the input area
+    let el = article.parentElement;
+    for (let i = 0; i < 8; i++) {
+      if (!el || el === document.body) break;
+      if (el.querySelector('textarea, input[type="file"]')) return false;
+      el = el.parentElement;
+    }
+    const text = (article.innerText || article.textContent || '').trim();
+    return text.length >= 40;
+  }
+
   function injectButtons() {
     if (isLoginPage()) return;
-    const all = Array.from(document.querySelectorAll('[role="article"]'));
 
-    all.forEach((article, idx) => {
-      // Skip articles inside the input area
-      let _el = article.parentElement;
-      for (let _i = 0; _i < 8; _i++) {
-        if (!_el || _el === document.body) break;
-        if (_el.querySelector('textarea, input[type="file"]')) return;
-        _el = _el.parentElement;
-      }
-
-      if (isUserArticle(article)) return;
-
+    document.querySelectorAll('[role="article"]').forEach(article => {
+      if (!_isDadiArticle(article)) return;
       const text = (article.innerText || article.textContent || '').trim();
-      if (text.length < 40) return;
 
-      // ── Meme button: inject once as soon as article is ready ──
+      // ── Meme: inject as soon as article is ready, find any button for styling ──
       if (!_memeInjected.has(article) && !article.querySelector('.dadi-meme-btn')) {
         _memeInjected.add(article);
-        const mBar = article.querySelector('.-ml-1\\.5')
-          || article.querySelector('[class~="-ml-1.5"]')
-          || article.querySelector('[class*="-ml-"]')
-          || article.querySelector('[class*="action"]')
-          || article;
-        const mExisting = mBar.querySelector('button:not(.dadi-meme-btn):not(.dadi-share-btn)');
-        const mCls = mExisting ? mExisting.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
+        const anyBtn = article.querySelector('button');
+        const mCls = anyBtn ? anyBtn.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
         const memeBtn = document.createElement('button');
         memeBtn.className = mCls + 'dadi-meme-btn';
         memeBtn.title = 'Make a meme';
         memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
         memeBtn.onclick = e => { e.stopPropagation(); showMemeModal(text); };
-        mBar.appendChild(memeBtn);
+        // Append to article body (below text, before action bar)
+        article.appendChild(memeBtn);
       }
 
-      // ── Share button: wait for Chainlit's copy/like/dislike to appear ──
+      // ── Share: strictly requires the Chainlit action bar with native buttons ──
       if (!_shareInjected.has(article) && !article.querySelector('.dadi-share-btn')) {
-        const sBar = article.querySelector('.-ml-1\\.5')
-          || article.querySelector('[class~="-ml-1.5"]')
-          || article.querySelector('[class*="-ml-"]');
+        // Only the exact -ml-1.5 bar — no broad fallbacks
+        const sBar = article.querySelector('.-ml-1\\.5') || article.querySelector('[class~="-ml-1.5"]');
         const chainlitBtn = sBar && sBar.querySelector('button:not(.dadi-share-btn):not(.dadi-meme-btn)');
         if (sBar && chainlitBtn) {
           _shareInjected.add(article);
@@ -1298,10 +1295,6 @@
           shareBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`;
           shareBtn.onclick = e => { e.stopPropagation(); showShareModal(text, findUserMessageForArticle(article)); };
           sBar.appendChild(shareBtn);
-          // Keep share button only on the last article of each response
-          if (idx > 0 && !isUserArticle(all[idx - 1])) {
-            all[idx - 1].querySelectorAll('.dadi-share-btn').forEach(b => b.remove());
-          }
         }
       }
     });
