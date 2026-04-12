@@ -1811,6 +1811,39 @@ async def on_start():
         ).send()
 
 
+@cl.on_chat_resume
+async def on_resume(thread: dict):
+    """Restore session state when user refreshes a chat with existing messages."""
+    if not _scheduler.running:
+        _scheduler.add_job(_run_daily_dadi_emails, "cron", hour=1, minute=30)
+        _scheduler.start()
+
+    # Rebuild conversation history from persisted thread steps
+    messages = []
+    for step in thread.get("steps", []):
+        step_type = step.get("type", "")
+        output = step.get("output", "") or ""
+        if step_type == "user_message" and output:
+            messages.append({"role": "user", "content": output})
+        elif step_type == "assistant_message" and output:
+            messages.append({"role": "assistant", "content": output})
+
+    cl.user_session.set("messages", messages)
+    cl.user_session.set("response_count", len([m for m in messages if m["role"] == "assistant"]))
+    cl.user_session.set("story_chapters", [])
+    cl.user_session.set("story_chapter_idx", 0)
+
+    user = cl.context.session.user
+    is_guest = user.metadata.get("role") == "guest"
+    email = None if is_guest else user.identifier
+    memories = await _get_memories(email) if email else []
+    cl.user_session.set("email", email)
+    cl.user_session.set("is_guest", is_guest)
+    cl.user_session.set("memories", memories)
+    cl.user_session.set("session_started_at", datetime.now(timezone.utc))
+    cl.user_session.set("is_first_time", False)
+
+
 @cl.on_message
 async def on_message(message: cl.Message):
     user_text = message.content
