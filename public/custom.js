@@ -438,7 +438,9 @@
     }
   });
   overlayObs.observe(document.body, { childList: true, subtree: true });
-  setTimeout(fadeOverlay, 3000); // hard fallback
+  // If textarea already exists (e.g. refresh with cached page), fade immediately
+  if (document.querySelector('textarea')) fadeOverlay();
+  setTimeout(fadeOverlay, 2000); // hard fallback
 
   /* ── OTP login UI — injected into Chainlit's native login form ──
      Layout after injection:
