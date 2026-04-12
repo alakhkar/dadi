@@ -1240,7 +1240,7 @@ async function generateIPLShareCard(dadiText, context, scoreData) {
 
   // Dadi label
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '400 18px "DM Sans", sans-serif';
-  ctx.fillText('\u2014 Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
+  ctx.fillText('\u2014 Dadi \U0001F475\U0001F3FE', RX, curY);
 
   // Footer brand right
   ctx.fillStyle = '#FF4D00'; ctx.font = '700 18px "DM Sans", sans-serif';
