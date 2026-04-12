@@ -1088,6 +1088,14 @@ function _iplWrapText(ctx, text, maxW) {
   return lines.length ? lines : [''];
 }
 
+function _iplClipText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let clipped = text;
+  while (clipped.length > 1 && ctx.measureText(clipped + '\u2026').width > maxW)
+    clipped = clipped.slice(0, -1);
+  return clipped + '\u2026';
+}
+
 function _iplRoundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
@@ -1195,9 +1203,10 @@ async function generateIPLShareCard(dadiText, context, scoreData) {
     ctx.fill();
 
     const sY = curY + 36;
+    const teamMaxW = Math.floor(BW / 2) - 60; // max width per team name (leaves room for "vs")
     // Team 1 (left)
-    ctx.fillStyle = '#ffffff'; ctx.font = '700 28px "DM Sans", sans-serif';
-    ctx.fillText(t1, RX + 20, sY);
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 22px "DM Sans", sans-serif';
+    ctx.fillText(_iplClipText(ctx, t1, teamMaxW), RX + 20, sY);
     ctx.fillStyle = '#FBBF24'; ctx.font = '700 38px "DM Sans", sans-serif';
     ctx.fillText(fmt(s1), RX + 20, sY + 46);
     ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
@@ -1210,9 +1219,9 @@ async function generateIPLShareCard(dadiText, context, scoreData) {
     ctx.textAlign = 'left';
 
     // Team 2 (right)
-    ctx.fillStyle = '#ffffff'; ctx.font = '700 28px "DM Sans", sans-serif';
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 22px "DM Sans", sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(t2, RX + BW - 20, sY);
+    ctx.fillText(_iplClipText(ctx, t2, teamMaxW), RX + BW - 20, sY);
     ctx.fillStyle = '#EF4444'; ctx.font = '700 38px "DM Sans", sans-serif';
     ctx.fillText(fmt(s2), RX + BW - 20, sY + 46);
     ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
