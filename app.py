@@ -1058,6 +1058,7 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
 <script>
 let lastOversSnapshot = '';
 let isRefreshing = false;
+let currentScoreData = null;
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -1066,12 +1067,262 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-function copyReaction(text, context) {
-  const full = '"' + text + '" — Dadi on ' + context + '\\n\\nmydadi.in/ipl';
-  navigator.clipboard.writeText(full).then(() => showToast('WhatsApp ke liye copy ho gaya!')).catch(() => showToast('Copy failed'));
+function _iplWrapText(ctx, text, maxW) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else { line = test; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+function _iplRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+async function generateIPLShareCard(dadiText, context, scoreData) {
+  await document.fonts.ready;
+  const W = 1080, LW = 380, PAD = 48;
+  const BW = W - LW - PAD * 2, BPX = 28, BPY = 20;
+  const _pre = document.createElement('canvas');
+  _pre.width = W; _pre.height = 100;
+  const _pc = _pre.getContext('2d');
+
+  // Measure Dadi text with shrinking font
+  let dFS = 26, dLH, dLines;
+  while (dFS > 14) {
+    _pc.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+    dLH = Math.round(dFS * 1.6);
+    dLines = _iplWrapText(_pc, dadiText, BW - BPX * 2);
+    if (106 + 200 + 40 + BPY + dFS + (dLines.length - 1) * dLH + BPY + 100 + 60 <= 4000) break;
+    dFS -= 2;
+  }
+  dLH = Math.round(dFS * 1.6);
+  _pc.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+  dLines = _iplWrapText(_pc, dadiText, BW - BPX * 2);
+  const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
+  const SCORE_H = 200;
+  const H = Math.max(1080, 80 + SCORE_H + 40 + dBH + 120 + 60);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Left panel (white)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, LW, H);
+
+  // Dadi image
+  const dadiImages = ['/public/images/dadi.png', '/public/images/dadi_dancing.png', '/public/images/dadi_karate.png', '/public/images/dadi_dancing_with_smirk.png'];
+  await fetch(dadiImages[Math.floor(Math.random() * dadiImages.length)])
+    .then(r => r.blob()).then(blob => new Promise(resolve => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min((LW - 40) / img.naturalWidth, (H - 120) / img.naturalHeight);
+        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+        ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 20, dw, dh);
+        URL.revokeObjectURL(url); resolve();
+      };
+      img.onerror = resolve; img.src = url;
+    })).catch(() => {});
+
+  // Red stripe
+  ctx.fillStyle = '#8B1A1A';
+  ctx.fillRect(LW - 6, 0, 6, H);
+
+  // Brand bottom-left
+  ctx.fillStyle = '#FF4D00';
+  ctx.font = '700 22px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('MYDADI.IN/IPL', LW / 2, H - 28);
+  ctx.textAlign = 'left';
+
+  // Right panel (dark)
+  ctx.fillStyle = '#0A0A0A';
+  ctx.fillRect(LW, 0, W - LW, H);
+  const RX = LW + PAD;
+
+  // "DADI KA IPL" header
+  ctx.fillStyle = '#FBBF24';
+  ctx.font = '700 22px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('DADI KA IPL', LW + (W - LW) / 2, 52);
+  ctx.textAlign = 'left';
+
+  // Divider
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(RX, 66, BW, 1);
+
+  // Score section
+  let curY = 90;
+  if (scoreData && scoreData.matches && scoreData.matches.length) {
+    const m = scoreData.matches[0];
+    const teams = m.teams || [];
+    const scores = m.score || [];
+    const t1 = teams[0] || '', t2 = teams[1] || '';
+    const scoreMap = {};
+    scores.forEach(s => { const k = (s.inning || '').split(' ')[0]; scoreMap[k] = s; });
+    const s1 = scoreMap[t1] || scores[0] || {};
+    const s2 = scoreMap[t2] || scores[1] || {};
+    const fmt = s => s.r !== undefined ? s.r + '/' + s.w : '--';
+    const ovs = s => s.o !== undefined ? '(' + s.o + ' ov)' : '';
+
+    // Score card background
+    _iplRoundRect(ctx, RX, curY, BW, SCORE_H, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fill();
+
+    const sY = curY + 36;
+    // Team 1 (left)
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 28px "DM Sans", sans-serif';
+    ctx.fillText(t1, RX + 20, sY);
+    ctx.fillStyle = '#FBBF24'; ctx.font = '700 38px "DM Sans", sans-serif';
+    ctx.fillText(fmt(s1), RX + 20, sY + 46);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
+    ctx.fillText(ovs(s1), RX + 20, sY + 72);
+
+    // VS (center)
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '700 18px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('vs', LW + (W - LW) / 2, sY + 46);
+    ctx.textAlign = 'left';
+
+    // Team 2 (right)
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 28px "DM Sans", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(t2, RX + BW - 20, sY);
+    ctx.fillStyle = '#EF4444'; ctx.font = '700 38px "DM Sans", sans-serif';
+    ctx.fillText(fmt(s2), RX + BW - 20, sY + 46);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
+    ctx.fillText(ovs(s2), RX + BW - 20, sY + 72);
+    ctx.textAlign = 'left';
+
+    // Status
+    if (m.status) {
+      ctx.fillStyle = '#EF4444'; ctx.font = '600 14px "DM Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(m.status, LW + (W - LW) / 2, curY + SCORE_H - 18);
+      ctx.textAlign = 'left';
+    }
+    curY += SCORE_H + 40;
+  }
+
+  // Context label
+  ctx.fillStyle = '#FBBF24'; ctx.font = '700 14px "DM Sans", sans-serif';
+  ctx.fillText((context || '').toUpperCase(), RX, curY);
+  curY += 26;
+
+  // Dadi commentary bubble
+  ctx.fillStyle = '#8B1A1A';
+  _iplRoundRect(ctx, RX, curY, BW, dBH, 18); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(RX + 18, curY + dBH);
+  ctx.lineTo(RX - 10, curY + dBH + 16);
+  ctx.lineTo(RX + 46, curY + dBH);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+  dLines.forEach((l, i) => ctx.fillText(l, RX + BPX, curY + BPY + dFS + i * dLH));
+  curY += dBH + 28;
+
+  // Dadi label
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '400 18px "DM Sans", sans-serif';
+  ctx.fillText('\u2014 Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
+
+  // Footer brand right
+  ctx.fillStyle = '#FF4D00'; ctx.font = '700 18px "DM Sans", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('MYDADI.IN/IPL', W - PAD, H - 28);
+  ctx.textAlign = 'left';
+
+  return canvas.toDataURL('image/png');
+}
+
+async function shareReaction(text, context) {
+  document.getElementById('ipl-share-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'ipl-share-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  const canNative = !!navigator.canShare;
+  modal.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:15px;font-weight:700;color:#FBBF24;font-family:'DM Sans',sans-serif;">Share Dadi's Roast</span>
+        <button id="ipl-share-close" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:22px;cursor:pointer;line-height:1;">&#x2715;</button>
+      </div>
+      <div id="ipl-share-gen" style="padding:30px;text-align:center;color:#FBBF24;font-family:'DM Sans',sans-serif;">Generating image...</div>
+      <div id="ipl-share-img-wrap" style="display:none;margin-bottom:14px;border-radius:12px;overflow:hidden;"></div>
+      <div id="ipl-share-btns" style="display:none;flex-direction:column;gap:10px;">
+        ${canNative ? '<button id="ipl-share-native" style="padding:13px;border-radius:10px;background:#FBBF24;color:#1a1a1a;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:\'DM Sans\',sans-serif;">&#x2B06;&#xFE0F; Share...</button>' : ''}
+        <button id="ipl-share-dl" style="padding:13px;border-radius:10px;background:#8B1A1A;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:'DM Sans',sans-serif;">&#x2B07; Download Image</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button id="ipl-share-copy" style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.07);color:#fff;font-weight:600;font-size:13px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;font-family:'DM Sans',sans-serif;">&#x1F4CB; Copy Image</button>
+          <button id="ipl-share-wa" style="padding:12px;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:13px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;">&#x1F4AC; WhatsApp</button>
+        </div>
+      </div>
+      <div id="ipl-share-status" style="text-align:center;font-size:13px;color:#4ade80;margin-top:10px;font-family:'DM Sans',sans-serif;"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#ipl-share-close').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  let dataUrl = null;
+  try {
+    dataUrl = await generateIPLShareCard(text, context, currentScoreData);
+    const img = document.createElement('img');
+    img.src = dataUrl; img.style.cssText = 'width:100%;border-radius:8px;display:block;';
+    modal.querySelector('#ipl-share-img-wrap').appendChild(img);
+    modal.querySelector('#ipl-share-gen').style.display = 'none';
+    modal.querySelector('#ipl-share-img-wrap').style.display = 'block';
+    modal.querySelector('#ipl-share-btns').style.display = 'flex';
+  } catch(e) {
+    modal.querySelector('#ipl-share-gen').textContent = 'Could not generate image.';
+  }
+
+  modal.querySelector('#ipl-share-native')?.addEventListener('click', async () => {
+    if (!dataUrl) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'dadi-ipl.png', { type: 'image/png' });
+      await navigator.share(navigator.canShare({ files: [file] }) ? { files: [file], title: 'Dadi ka IPL', url: 'https://www.mydadi.in/ipl' } : { title: 'Dadi ka IPL', url: 'https://www.mydadi.in/ipl' });
+    } catch(_) {}
+  });
+
+  modal.querySelector('#ipl-share-dl').addEventListener('click', () => {
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = 'dadi-ipl.png'; a.click();
+  });
+
+  modal.querySelector('#ipl-share-copy').addEventListener('click', async () => {
+    if (!dataUrl) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      modal.querySelector('#ipl-share-status').textContent = '\u2713 Copied to clipboard!';
+    } catch(_) { modal.querySelector('#ipl-share-status').textContent = 'Copy not supported on this browser.'; }
+  });
+
+  modal.querySelector('#ipl-share-wa').addEventListener('click', () => {
+    window.open('https://wa.me/?text=' + encodeURIComponent('"' + text + '" \u2014 Dadi on ' + context + '\\n\\nmydadi.in/ipl'), '_blank');
+  });
 }
 
 function renderScoreboard(data) {
+  currentScoreData = data;
   const sb = document.getElementById('scoreboard');
   const liveDot = document.getElementById('live-dot');
   const liveText = document.getElementById('live-text');
@@ -1136,10 +1387,10 @@ function renderReactions(commentary) {
     return;
   }
   el.innerHTML = commentary.map(r => `
-    <div class="reaction-card" onclick="copyReaction(${JSON.stringify(r.reaction)}, ${JSON.stringify(r.context)})">
+    <div class="reaction-card" onclick="shareReaction(${JSON.stringify(r.reaction)}, ${JSON.stringify(r.context)})">
       <div class="reaction-context">${r.context || ''}</div>
       <div class="reaction-text">"${r.reaction || ''}"</div>
-      <div class="copy-hint"><span>Tap to copy for WhatsApp</span><span style="font-size:12px">\u2192</span></div>
+      <div class="copy-hint"><span style="color:#FBBF24;font-weight:600;">&#x1F4F2; Tap to share as image</span><span style="font-size:12px">\u2192</span></div>
     </div>
   `).join('');
 }
