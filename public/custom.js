@@ -806,29 +806,28 @@
       ctx.fillRect(0, 0, SIZE, SIZE);
     });
 
-    // Pre-calculate font size so all text fits without clipping
+    // Text lives in the bottom third — scale font to fill that zone
     const PAD = 44;
     const maxW = SIZE - PAD * 2;
     const memeText = _cleanText(text);
-    const MAX_TEXT_H = SIZE - PAD * 2 - 60; // usable vertical space for text
+    const BOTTOM_THIRD_H = Math.floor(SIZE / 3) - PAD; // ~316px
 
     let fontSize = 96, lines;
     while (fontSize >= 18) {
       ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
       lines = _wrapText(ctx, memeText, maxW);
       const lhTmp = Math.round(fontSize * 1.25);
-      if (fontSize + (lines.length - 1) * lhTmp <= MAX_TEXT_H) break;
+      if (fontSize + (lines.length - 1) * lhTmp <= BOTTOM_THIRD_H) break;
       fontSize -= 4;
     }
 
     const lh = Math.round(fontSize * 1.25);
     let y = SIZE - PAD - (lines.length - 1) * lh;
 
-    // Gradient — extend up to cover the full text block
-    const gradStart = Math.max(0, y - fontSize - 40);
-    const grad = ctx.createLinearGradient(0, gradStart, 0, SIZE);
+    // Gradient covers the bottom third of the image
+    const grad = ctx.createLinearGradient(0, SIZE * 0.58, 0, SIZE);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.82)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.88)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, SIZE, SIZE);
 
@@ -1217,11 +1216,28 @@
     });
   }
 
+  function isUserArticle(article) {
+    // User messages in Chainlit are right-aligned — their wrapper has justify-end or flex-row-reverse
+    let el = article;
+    for (let i = 0; i < 4; i++) {
+      if (!el || el === document.body) break;
+      const cls = el.className || '';
+      if (/\bjustify-end\b/.test(cls) || /\bflex-row-reverse\b/.test(cls)) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
   function findUserMessageForArticle(dadiArticle) {
     const all = Array.from(document.querySelectorAll('[role="article"]'));
     const idx = all.indexOf(dadiArticle);
-    if (idx <= 0) return '';
-    return (all[idx - 1].innerText || all[idx - 1].textContent || '').trim();
+    // Walk backwards, skipping consecutive Dadi articles, until we hit a user article
+    for (let i = idx - 1; i >= 0; i--) {
+      if (isUserArticle(all[i])) {
+        return (all[i].innerText || all[i].textContent || '').trim();
+      }
+    }
+    return '';
   }
 
   /* ── Inject share + meme buttons into each Dadi message ── */
@@ -1229,8 +1245,9 @@
 
   function injectShareButtons() {
     if (isLoginPage()) return;
+    const all = Array.from(document.querySelectorAll('[role="article"]'));
 
-    document.querySelectorAll('[role="article"]').forEach(article => {
+    all.forEach((article, idx) => {
       if (_decoratedArticles.has(article)) return;
       if (article.querySelector('.dadi-share-btn, .dadi-meme-btn')) { _decoratedArticles.add(article); return; }
 
@@ -1241,6 +1258,9 @@
         if (_el.querySelector('textarea, input[type="file"]')) return;
         _el = _el.parentElement;
       }
+
+      // Skip user messages — buttons go on Dadi's replies only
+      if (isUserArticle(article)) { _decoratedArticles.add(article); return; }
 
       const text = (article.innerText || article.textContent || '').trim();
       if (text.length < 40) return;
@@ -1281,6 +1301,11 @@
         showMemeModal(text);
       };
       bar.appendChild(memeBtn);
+
+      // Multiple Dadi articles in one response — keep buttons only on the latest one
+      if (idx > 0 && !isUserArticle(all[idx - 1])) {
+        all[idx - 1].querySelectorAll('.dadi-share-btn, .dadi-meme-btn').forEach(b => b.remove());
+      }
     });
   }
 
