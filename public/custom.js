@@ -806,32 +806,31 @@
       ctx.fillRect(0, 0, SIZE, SIZE);
     });
 
-    // Bottom gradient so text is always readable
-    const grad = ctx.createLinearGradient(0, SIZE * 0.5, 0, SIZE);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.78)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SIZE, SIZE);
-
-    // Meme text — Kalam font, white fill + black stroke
+    // Pre-calculate font size so all text fits without clipping
     const PAD = 44;
     const maxW = SIZE - PAD * 2;
     const memeText = _cleanText(text);
+    const MAX_TEXT_H = SIZE - PAD * 2 - 60; // usable vertical space for text
 
     let fontSize = 96, lines;
-    while (fontSize >= 40) {
+    while (fontSize >= 18) {
       ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
       lines = _wrapText(ctx, memeText, maxW);
-      if (lines.length <= 4) break;
-      fontSize -= 8;
-    }
-    if (lines.length > 4) {
-      lines = lines.slice(0, 4);
-      lines[3] = lines[3].replace(/\s+\S*$/, '') + '\u2026';
+      const lhTmp = Math.round(fontSize * 1.25);
+      if (fontSize + (lines.length - 1) * lhTmp <= MAX_TEXT_H) break;
+      fontSize -= 4;
     }
 
     const lh = Math.round(fontSize * 1.25);
     let y = SIZE - PAD - (lines.length - 1) * lh;
+
+    // Gradient — extend up to cover the full text block
+    const gradStart = Math.max(0, y - fontSize - 40);
+    const grad = ctx.createLinearGradient(0, gradStart, 0, SIZE);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.82)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SIZE, SIZE);
 
     ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
     ctx.textAlign = 'center';
@@ -993,8 +992,7 @@
     if (userText) {
       const uFS = 24, uLH = Math.round(uFS * 1.5);
       _pc.font = `400 ${uFS}px "Kalam", cursive`;
-      let uL = _wrapText(_pc, userText, BW - BPX * 2);
-      if (uL.length > 3) uL = uL.slice(0, 3);
+      const uL = _wrapText(_pc, userText, BW - BPX * 2);
       uPreH = 26 + BPY + uFS + (uL.length - 1) * uLH + BPY + 36;
     }
 
@@ -1073,8 +1071,7 @@
       curY += 26;
       const uFS = 24, uLH = Math.round(uFS * 1.5);
       ctx.font = `400 ${uFS}px "Kalam", cursive`;
-      let uLines = _wrapText(ctx, userText, BW - BPX * 2);
-      if (uLines.length > 3) { uLines = uLines.slice(0, 3); uLines[2] = uLines[2].replace(/\s+\S*$/, '') + '\u2026'; }
+      const uLines = _wrapText(ctx, userText, BW - BPX * 2);
       const uBH = BPY + uFS + (uLines.length - 1) * uLH + BPY;
       ctx.fillStyle = '#FFFFFF';
       _roundRect(ctx, RMAX - BW, curY, BW, uBH, 18); ctx.fill();
