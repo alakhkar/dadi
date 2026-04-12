@@ -1029,53 +1029,48 @@
   new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
   injectShareButtons();
 
-  /* ── Roast me button next to attach icon in input area ── */
+  /* ── Roast me button — fixed above the input box ── */
   function injectRoastButton() {
-    if (isLoginPage() || document.querySelector('.dadi-roast-btn')) return;
+    if (isLoginPage() || document.getElementById('dadi-roast-btn')) return;
+    if (!document.querySelector('textarea')) return;
 
-    const textarea = document.querySelector('textarea');
-    if (!textarea) return;
+    const btn = document.createElement('button');
+    btn.id = 'dadi-roast-btn';
+    btn.type = 'button';
+    btn.textContent = '🔥 Roast me, Dadi!';
+    btn.style.cssText = [
+      'position:fixed',
+      'bottom:90px',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'z-index:99998',
+      'cursor:pointer',
+      'font-size:0.82rem',
+      'font-weight:600',
+      'color:#8B1A1A',
+      'background:#FEF0E7',
+      'border:1.5px solid #e8c9b0',
+      'border-radius:20px',
+      'padding:6px 16px',
+      'white-space:nowrap',
+      'font-family:inherit',
+      'box-shadow:0 2px 8px rgba(139,26,26,0.15)',
+    ].join(';');
 
-    // Walk up from textarea to the flex row that holds the bottom action buttons
-    // Chainlit structure: textarea > div > div (flex row with buttons)
-    // We want the sibling row below/around the textarea that has the submit button
-    let btnRow = null;
-    let el = textarea.parentElement;
-    for (let i = 0; i < 8 && el; i++) {
-      // Look for a sibling or child that is a flex container with buttons
-      const siblings = Array.from(el.parentElement?.children || []);
-      for (const sib of siblings) {
-        if (sib === el) continue;
-        if (sib.querySelector('button') && !sib.contains(textarea)) {
-          btnRow = sib;
-          break;
-        }
-      }
-      if (btnRow) break;
-      el = el.parentElement;
-    }
-    if (!btnRow) return;
-
-    const roastBtn = document.createElement('button');
-    roastBtn.className = 'dadi-roast-btn';
-    roastBtn.type = 'button';
-    roastBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;flex-shrink:0;align-self:center;';
-    roastBtn.textContent = '🔥 Roast me, Dadi!';
-    roastBtn.onclick = () => {
+    btn.onclick = () => {
       const ta = document.querySelector('textarea');
       if (!ta) return;
       const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
       nativeSet.call(ta, 'Roast me, Dadi!');
       ta.dispatchEvent(new Event('input', { bubbles: true }));
       setTimeout(() => {
-        const form = ta.closest('form');
-        const submitBtn = form?.querySelector('button[type="submit"]');
+        const submitBtn = ta.closest('form')?.querySelector('button[type="submit"]');
         if (submitBtn) submitBtn.click();
-        else form?.requestSubmit?.();
+        else ta.closest('form')?.requestSubmit?.();
       }, 50);
     };
 
-    btnRow.appendChild(roastBtn);
+    document.body.appendChild(btn);
   }
 
   new MutationObserver(injectRoastButton).observe(document.body, { childList: true, subtree: true });
