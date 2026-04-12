@@ -1240,17 +1240,19 @@
     return '';
   }
 
-  /* ── Inject share + meme buttons into each Dadi message ── */
-  const _decoratedArticles = new WeakSet();
+  /* ── Inject meme + share buttons into Dadi messages ── */
+  // Meme: injected immediately when article appears (no action bar needed).
+  // Share: waits until Chainlit's copy/like/dislike buttons are present in the
+  //        action bar, then sits next to them. MutationObserver keeps retrying
+  //        until they appear (they're added after streaming finishes).
+  const _memeInjected  = new WeakSet();
+  const _shareInjected = new WeakSet();
 
-  function injectShareButtons() {
+  function injectButtons() {
     if (isLoginPage()) return;
     const all = Array.from(document.querySelectorAll('[role="article"]'));
 
     all.forEach((article, idx) => {
-      if (_decoratedArticles.has(article)) return;
-      if (article.querySelector('.dadi-share-btn, .dadi-meme-btn')) { _decoratedArticles.add(article); return; }
-
       // Skip articles inside the input area
       let _el = article.parentElement;
       for (let _i = 0; _i < 8; _i++) {
@@ -1259,59 +1261,54 @@
         _el = _el.parentElement;
       }
 
-      // Skip user messages — buttons go on Dadi's replies only
-      if (isUserArticle(article)) { _decoratedArticles.add(article); return; }
+      if (isUserArticle(article)) return;
 
       const text = (article.innerText || article.textContent || '').trim();
       if (text.length < 40) return;
 
-      _decoratedArticles.add(article);
+      // ── Meme button: inject once as soon as article is ready ──
+      if (!_memeInjected.has(article) && !article.querySelector('.dadi-meme-btn')) {
+        _memeInjected.add(article);
+        const mBar = article.querySelector('.-ml-1\\.5')
+          || article.querySelector('[class~="-ml-1.5"]')
+          || article.querySelector('[class*="-ml-"]')
+          || article.querySelector('[class*="action"]')
+          || article;
+        const mExisting = mBar.querySelector('button:not(.dadi-meme-btn):not(.dadi-share-btn)');
+        const mCls = mExisting ? mExisting.className + ' ' : 'inline-flex items-center justify-center h-9 w-9 ';
+        const memeBtn = document.createElement('button');
+        memeBtn.className = mCls + 'dadi-meme-btn';
+        memeBtn.title = 'Make a meme';
+        memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
+        memeBtn.onclick = e => { e.stopPropagation(); showMemeModal(text); };
+        mBar.appendChild(memeBtn);
+      }
 
-      // Find the action bar — try Chainlit's known containers, fall back to article
-      const bar = article.querySelector('.-ml-1\\.5')
-        || article.querySelector('[class~="-ml-1.5"]')
-        || article.querySelector('[class*="-ml-"]')
-        || article.querySelector('[class*="action"]')
-        || article;
-
-      // Copy styling from an existing Chainlit button so icons look native
-      const existingBtn = bar.querySelector('button:not(.dadi-share-btn):not(.dadi-meme-btn)');
-      const btnCls = existingBtn
-        ? existingBtn.className + ' '
-        : 'inline-flex items-center justify-center h-9 w-9 ';
-
-      // Share button (canvas card)
-      const shareBtn = document.createElement('button');
-      shareBtn.className = btnCls + 'dadi-share-btn';
-      shareBtn.title = 'Share this response';
-      shareBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`;
-      shareBtn.onclick = e => {
-        e.stopPropagation();
-        showShareModal(text, findUserMessageForArticle(article));
-      };
-      bar.appendChild(shareBtn);
-
-      // Meme button (canvas meme)
-      const memeBtn = document.createElement('button');
-      memeBtn.className = btnCls + 'dadi-meme-btn';
-      memeBtn.title = 'Make a meme';
-      memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
-      memeBtn.onclick = e => {
-        e.stopPropagation();
-        showMemeModal(text);
-      };
-      bar.appendChild(memeBtn);
-
-      // Multiple Dadi articles in one response — move share button to the latest only
-      // (meme buttons stay on every article)
-      if (idx > 0 && !isUserArticle(all[idx - 1])) {
-        all[idx - 1].querySelectorAll('.dadi-share-btn').forEach(b => b.remove());
+      // ── Share button: wait for Chainlit's copy/like/dislike to appear ──
+      if (!_shareInjected.has(article) && !article.querySelector('.dadi-share-btn')) {
+        const sBar = article.querySelector('.-ml-1\\.5')
+          || article.querySelector('[class~="-ml-1.5"]')
+          || article.querySelector('[class*="-ml-"]');
+        const chainlitBtn = sBar && sBar.querySelector('button:not(.dadi-share-btn):not(.dadi-meme-btn)');
+        if (sBar && chainlitBtn) {
+          _shareInjected.add(article);
+          const shareBtn = document.createElement('button');
+          shareBtn.className = chainlitBtn.className + ' dadi-share-btn';
+          shareBtn.title = 'Share this response';
+          shareBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`;
+          shareBtn.onclick = e => { e.stopPropagation(); showShareModal(text, findUserMessageForArticle(article)); };
+          sBar.appendChild(shareBtn);
+          // Keep share button only on the last article of each response
+          if (idx > 0 && !isUserArticle(all[idx - 1])) {
+            all[idx - 1].querySelectorAll('.dadi-share-btn').forEach(b => b.remove());
+          }
+        }
       }
     });
   }
 
-  new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
-  injectShareButtons();
+  new MutationObserver(injectButtons).observe(document.body, { childList: true, subtree: true });
+  injectButtons();
 
 
 })();
