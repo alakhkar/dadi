@@ -271,9 +271,14 @@ async def _get_cricket_context() -> str:
 
 
 _IPL_DADI_PROMPT = (
-    "You are Pushpa Devi Sharma, 68-year-old grandmother from Jaipur, watching IPL live on TV. "
+    "You are Pushpa Devi Sharma, 68-year-old grandmother from Jaipur, watching IPL on TV. "
     "Give DEADPAN, SAVAGE reactions in 1-2 sentences MAX. "
     "Speak Hinglish (Hindi + English mix). No emojis. No hashtags. "
+    "STRICT RULES: "
+    "1. React ONLY to facts explicitly in the match data (score, overs, status, team names). "
+    "2. Do NOT mention specific player names, wickets, boundaries, or sixes unless stated in the data. "
+    "3. Do NOT invent match events, scores, or outcomes not listed. "
+    "4. Base reactions on the match situation — high/low score, winning team, match ended, etc. "
     "Reference specific player names and stats from the match data. "
     "Return ONLY a valid JSON array of exactly 6 objects — no markdown, no backticks:\n"
     '[{"reaction": "...", "context": "..."}]'
@@ -430,7 +435,7 @@ async def _get_ipl_commentary(match_data: dict) -> list[dict]:
     try:
         llm_msgs = [
             SystemMessage(content=_IPL_DADI_PROMPT),
-            HumanMessage(content=f"Live match data:\n{match_summary}\n\nGenerate 6 reactions. Return ONLY JSON array."),
+            HumanMessage(content=f"Live match data:\n{match_summary}\n\nGenerate 6 reactions based ONLY on this data. Do not add player names or events not listed above. Return ONLY a JSON array: [{{\"reaction\": \"...\", \"context\": \"...\"}}]"),
         ]
         result = await asyncio.wait_for(LLM.ainvoke(llm_msgs), timeout=30.0)
         text = result.content.strip()
@@ -1155,6 +1160,17 @@ async function fetchData(force) {
   isRefreshing = true;
 
   try {
+    // Step 1: fetch live score immediately — no LLM wait
+    const scoreRes = await fetch('/ipl/score');
+    if (scoreRes.ok) {
+      const scoreData = await scoreRes.json();
+      renderScoreboard(scoreData);
+      renderPointsTable(scoreData.points_table);
+      lastOversSnapshot = scoreData.overs_snapshot || '';
+    }
+
+    // Step 2: fetch Dadi's commentary (LLM call, may take a moment)
+    document.getElementById('reactions').innerHTML = '<div class="loading-box">Dadi soch rahi hai...</div>';
     const url = '/ipl/data' + (force ? '?force=1' : '');
     const res = await fetch(url);
     if (!res.ok) throw new Error('fetch failed');
@@ -1163,7 +1179,6 @@ async function fetchData(force) {
     renderScoreboard(data);
     renderReactions(data.commentary);
     renderPointsTable(data.points_table);
-
     lastOversSnapshot = data.overs_snapshot || '';
   } catch(e) {
     console.error('[IPL]', e);
@@ -1216,6 +1231,20 @@ setInterval(async () => {
             # IPL page — must be before Chainlit SPA catch-all
             if request.url.path == "/ipl":
                 return _HTMLResponse(_IPL_PAGE_HTML)
+            if request.url.path == "/ipl/score":
+                # Live score only — no LLM, fast response
+                match_data = await _get_ipl_match_data()
+                snap_parts = []
+                if match_data:
+                    for m in match_data.get("matches", []):
+                        for s in m.get("score", []):
+                            snap_parts.append(f"{s.get('inning','')[:10]}:{s.get('o','')}")
+                return JSONResponse({
+                    "matches":        (match_data or {}).get("matches", []),
+                    "points_table":   (match_data or {}).get("points_table", []),
+                    "overs_snapshot": "|".join(snap_parts),
+                    "fetched_at":     int(time.time()),
+                })
             if request.url.path == "/ipl/data":
                 match_data = await _get_ipl_match_data()
                 commentary = await _get_ipl_commentary(match_data or {})
