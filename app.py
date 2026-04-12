@@ -357,11 +357,12 @@ async def _get_ipl_match_data() -> dict | None:
                 if pdata.get("status") == "success":
                     for row in pdata.get("data", []):
                         result["points_table"].append({
-                            "team": row.get("teamName") or row.get("team", ""),
-                            "p":    row.get("p") or row.get("matchesPlayed", 0),
-                            "w":    row.get("w") or row.get("win", 0),
-                            "l":    row.get("l") or row.get("loss", 0),
-                            "pts":  row.get("pts") or row.get("points", 0),
+                            "team": next((row[k] for k in ("teamName", "team") if k in row), ""),
+                            "p":    next((row[k] for k in ("p", "matchesPlayed", "matches", "played") if k in row), 0),
+                            "w":    next((row[k] for k in ("w", "win", "wins") if k in row), 0),
+                            "l":    next((row[k] for k in ("l", "loss", "losses") if k in row), 0),
+                            "pts":  next((row[k] for k in ("pts", "points") if k in row), 0),
+                            "nrr":  next((row[k] for k in ("nrr", "netRunRate") if k in row), None),
                         })
 
         result["fetched_at"] = int(now)
@@ -1267,9 +1268,24 @@ setInterval(async () => {
                 if not cricapi_key:
                     return JSONResponse({"error": "CRICAPI_KEY not set"})
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    r = await client.get("https://api.cricapi.com/v1/currentMatches",
-                                         params={"apikey": cricapi_key, "offset": 0})
-                return JSONResponse(r.json())
+                    matches_r, series_r = await asyncio.gather(
+                        client.get("https://api.cricapi.com/v1/currentMatches",
+                                   params={"apikey": cricapi_key, "offset": 0}),
+                        client.get("https://api.cricapi.com/v1/series",
+                                   params={"apikey": cricapi_key, "offset": 0, "search": "IPL"}),
+                        return_exceptions=True,
+                    )
+                out = {"matches": matches_r.json() if not isinstance(matches_r, Exception) else str(matches_r)}
+                if not isinstance(series_r, Exception) and series_r.status_code == 200:
+                    sdata = series_r.json()
+                    ipl_id = next((s["id"] for s in sdata.get("data", []) if "ipl" in s.get("name","").lower()), None)
+                    out["ipl_series_id"] = ipl_id
+                    if ipl_id:
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            pts_r = await client.get("https://api.cricapi.com/v1/series_points",
+                                                     params={"apikey": cricapi_key, "id": ipl_id})
+                        out["points_raw"] = pts_r.json()
+                return JSONResponse(out)
 
             # Share card routes — must be handled here (before Chainlit SPA catch-all)
             if request.url.path.startswith("/card/"):
