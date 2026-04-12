@@ -887,7 +887,7 @@ try:
     })
 
     _SW_JS = r"""
-const CACHE = 'dadi-v1';
+const CACHE = 'dadi-v2';
 const PRECACHE = [
   '/public/favicon.png',
   '/public/logo_dark.png',
@@ -922,6 +922,7 @@ self.addEventListener('fetch', e => {
       url.pathname.startsWith('/ws') ||
       url.pathname.startsWith('/login') ||
       url.pathname.startsWith('/api') ||
+      url.pathname.startsWith('/ipl/') ||
       url.pathname.includes('socket')) return;
 
   if (url.pathname.startsWith('/public/')) {
