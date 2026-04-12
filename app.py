@@ -1274,7 +1274,7 @@ async function shareReaction(text, context) {
       <div id="ipl-share-gen" style="padding:30px;text-align:center;color:#FBBF24;font-family:'DM Sans',sans-serif;">Generating image...</div>
       <div id="ipl-share-img-wrap" style="display:none;margin-bottom:14px;border-radius:12px;overflow:hidden;"></div>
       <div id="ipl-share-btns" style="display:none;flex-direction:column;gap:10px;">
-        ${canNative ? '<button id="ipl-share-native" style="padding:13px;border-radius:10px;background:#FBBF24;color:#1a1a1a;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:\'DM Sans\',sans-serif;">&#x2B06;&#xFE0F; Share...</button>' : ''}
+        ${canNative ? '<button id="ipl-share-native" style="padding:13px;border-radius:10px;background:#FBBF24;color:#1a1a1a;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:\\'DM Sans\\',sans-serif;">&#x2B06;&#xFE0F; Share...</button>' : ''}
         <button id="ipl-share-dl" style="padding:13px;border-radius:10px;background:#8B1A1A;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:'DM Sans',sans-serif;">&#x2B07; Download Image</button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button id="ipl-share-copy" style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.07);color:#fff;font-weight:600;font-size:13px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;font-family:'DM Sans',sans-serif;">&#x1F4CB; Copy Image</button>
