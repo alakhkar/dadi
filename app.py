@@ -301,6 +301,7 @@ async def _get_ipl_match_data() -> dict | None:
     """Fetch structured IPL match data. Cached for 120s."""
     cricapi_key = os.environ.get("CRICAPI_KEY", "")
     if not cricapi_key:
+        print("[IPL] CRICAPI_KEY not set — skipping fetch")
         return None
     now = time.time()
     if _IPL_DATA_CACHE["data"] and now - _IPL_DATA_CACHE["ts"] < _CRICKET_TTL:
@@ -382,6 +383,7 @@ async def _get_ipl_match_data() -> dict | None:
             match_ended = any(m.get("matchEnded") for m in result["matches"])
             _IPL_DATA_CACHE["data"] = result
             _IPL_DATA_CACHE["ts"]   = now if not match_ended else now - _CRICKET_TTL + 7200
+            print(f"[IPL] Fetched {len(result['matches'])} match(es), {len(result['points_table'])} points table rows")
         elif _IPL_DATA_CACHE["data"]:
             # No IPL match in API response — keep serving last known data
             # for up to 2 hours so the page doesn't go blank right after a match ends.
@@ -1494,6 +1496,7 @@ setInterval(async () => {
                 return _HTMLResponse(_IPL_PAGE_HTML)
             if request.url.path == "/ipl/score":
                 # Live score only — no LLM, fast response
+                print("[IPL] /ipl/score hit")
                 match_data = await _get_ipl_match_data()
                 snap_parts = []
                 if match_data:
@@ -1507,6 +1510,7 @@ setInterval(async () => {
                     "fetched_at":     int(time.time()),
                 })
             if request.url.path == "/ipl/data":
+                print("[IPL] /ipl/data hit")
                 match_data = await _get_ipl_match_data()
                 commentary = await _get_ipl_commentary(match_data or {})
                 snap_parts = []
