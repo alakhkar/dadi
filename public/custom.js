@@ -1302,9 +1302,10 @@
       };
       bar.appendChild(memeBtn);
 
-      // Multiple Dadi articles in one response — keep buttons only on the latest one
+      // Multiple Dadi articles in one response — move share button to the latest only
+      // (meme buttons stay on every article)
       if (idx > 0 && !isUserArticle(all[idx - 1])) {
-        all[idx - 1].querySelectorAll('.dadi-share-btn, .dadi-meme-btn').forEach(b => b.remove());
+        all[idx - 1].querySelectorAll('.dadi-share-btn').forEach(b => b.remove());
       }
     });
   }
