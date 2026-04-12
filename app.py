@@ -1487,6 +1487,8 @@ setInterval(async () => {
 
     class _AnalyticsMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
+            if request.url.path.startswith("/ipl"):
+                print(f"[MW] {request.method} {request.url.path}")
             if request.url.path == "/manifest.json":
                 return JSONResponse(content=json.loads(_MANIFEST_JSON), media_type="application/manifest+json")
             if request.url.path == "/sw.js":
