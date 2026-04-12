@@ -1029,34 +1029,5 @@
   new MutationObserver(injectShareButtons).observe(document.body, { childList: true, subtree: true });
   injectShareButtons();
 
-  /* ── Roast me button — fixed, injected into <html> so React can't wipe it ── */
-  function ensureRoastButton() {
-    if (isLoginPage()) { document.getElementById('dadi-roast-btn')?.remove(); return; }
-    if (document.getElementById('dadi-roast-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'dadi-roast-btn';
-    btn.type = 'button';
-    btn.textContent = '🔥 Roast me, Dadi!';
-    btn.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:99998;cursor:pointer;font-size:0.82rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1.5px solid #e8c9b0;border-radius:20px;padding:6px 16px;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(139,26,26,0.15);';
-
-    btn.onclick = () => {
-      const ta = document.querySelector('textarea');
-      if (!ta) return;
-      const nativeSet = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      nativeSet.call(ta, 'Roast me, Dadi!');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      setTimeout(() => {
-        const submitBtn = ta.closest('form')?.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.click();
-        else ta.closest('form')?.requestSubmit?.();
-      }, 50);
-    };
-
-    document.documentElement.appendChild(btn);
-  }
-
-  ensureRoastButton();
-  new MutationObserver(ensureRoastButton).observe(document.documentElement, { childList: true });
 
 })();
