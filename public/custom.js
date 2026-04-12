@@ -962,21 +962,282 @@
     setTimeout(generate, 30);
   }
 
-/* ── Inject meme button into each Dadi message ── */
+  function _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  async function _generateCard(dadiText, userText) {
+    await _ensureKalam();
+    await document.fonts.ready;
+
+    const W = 1080, LW = 360, PAD = 56;
+    const BW = W - LW - PAD * 2;
+    const BPX = 30, BPY = 22;
+
+    const _pre = document.createElement('canvas');
+    _pre.width = W; _pre.height = 100;
+    const _pc = _pre.getContext('2d');
+
+    // User bubble pre-measure
+    let uPreH = 0;
+    if (userText) {
+      const uFS = 24, uLH = Math.round(uFS * 1.5);
+      _pc.font = `400 ${uFS}px "Kalam", cursive`;
+      let uL = _wrapText(_pc, userText, BW - BPX * 2);
+      if (uL.length > 3) uL = uL.slice(0, 3);
+      uPreH = 26 + BPY + uFS + (uL.length - 1) * uLH + BPY + 36;
+    }
+
+    // Dadi bubble pre-measure — shrink font to keep image under ~4000px tall
+    let dFS = 28, dLH, dLines;
+    while (dFS > 14) {
+      _pc.font = `400 ${dFS}px "Kalam", cursive`;
+      dLH = Math.round(dFS * 1.55);
+      dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+      if (106 + uPreH + 26 + BPY + dFS + (dLines.length - 1) * dLH + BPY + 40 + 70 + 60 <= 4000) break;
+      dFS -= 2;
+    }
+    dLH = Math.round(dFS * 1.55);
+    _pc.font = `400 ${dFS}px "Kalam", cursive`;
+    dLines = _wrapText(_pc, dadiText, BW - BPX * 2);
+    const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
+    const H = Math.max(1350, 106 + uPreH + 26 + dBH + 40 + 70 + 60);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Left panel (white)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, LW, H);
+
+    // Dadi image in left panel (random)
+    const _cardImages = [
+      '/public/images/dadi.png', '/public/images/dadi_dancing.png',
+      '/public/images/dadi_karate.png', '/public/images/dadi_dancing_with_smirk.png',
+    ];
+    await fetch(_cardImages[Math.floor(Math.random() * _cardImages.length)])
+      .then(r => r.blob()).then(blob => new Promise(resolve => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min((LW - 40) / img.naturalWidth, (H - 100) / img.naturalHeight);
+          const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+          ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 30, dw, dh);
+          URL.revokeObjectURL(url); resolve();
+        };
+        img.onerror = resolve; img.src = url;
+      })).catch(() => {});
+
+    // Brand bottom-left
+    ctx.fillStyle = '#FF4D00';
+    ctx.font = '400 30px "Kalam", cursive';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'center';
+    ctx.fillText('MYDADI.IN', LW / 2, H - 40);
+    ctx.textAlign = 'left'; ctx.letterSpacing = '0px';
+
+    // Right panel (cream)
+    ctx.fillStyle = '#F2EDE8';
+    ctx.fillRect(LW, 0, W - LW, H);
+
+    const RX = LW + PAD, RMAX = W - PAD, FY = H - 70;
+
+    // "DADI AI" header
+    ctx.fillStyle = '#8B1A1A';
+    ctx.font = '700 22px "Kalam", cursive';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'center';
+    ctx.fillText('DADI AI', LW + (W - LW) / 2, 72);
+    ctx.textAlign = 'left'; ctx.letterSpacing = '0px';
+
+    let curY = 106;
+
+    // User bubble
+    if (userText) {
+      ctx.fillStyle = '#9e7a5a';
+      ctx.font = '400 19px "Kalam", cursive';
+      ctx.textAlign = 'right';
+      ctx.fillText('You', RMAX, curY);
+      ctx.textAlign = 'left';
+      curY += 26;
+      const uFS = 24, uLH = Math.round(uFS * 1.5);
+      ctx.font = `400 ${uFS}px "Kalam", cursive`;
+      let uLines = _wrapText(ctx, userText, BW - BPX * 2);
+      if (uLines.length > 3) { uLines = uLines.slice(0, 3); uLines[2] = uLines[2].replace(/\s+\S*$/, '') + '\u2026'; }
+      const uBH = BPY + uFS + (uLines.length - 1) * uLH + BPY;
+      ctx.fillStyle = '#FFFFFF';
+      _roundRect(ctx, RMAX - BW, curY, BW, uBH, 18); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(RMAX - 18, curY + uBH);
+      ctx.lineTo(RMAX + 10, curY + uBH + 16);
+      ctx.lineTo(RMAX - 46, curY + uBH);
+      ctx.fill();
+      ctx.fillStyle = '#2d1a10';
+      ctx.font = `400 ${uFS}px "Kalam", cursive`;
+      uLines.forEach((l, i) => ctx.fillText(l, RMAX - BW + BPX, curY + BPY + uFS + i * uLH));
+      curY += uBH + 36;
+    }
+
+    // Dadi bubble
+    ctx.fillStyle = '#9e7a5a';
+    ctx.font = '400 19px "Kalam", cursive';
+    ctx.fillText('Dadi \uD83D\uDC75\uD83C\uDFFE', RX, curY);
+    curY += 26;
+    ctx.fillStyle = '#8B1A1A';
+    _roundRect(ctx, RX, curY, BW, dBH, 18); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(RX + 18, curY + dBH);
+    ctx.lineTo(RX - 10, curY + dBH + 16);
+    ctx.lineTo(RX + 46, curY + dBH);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `400 ${dFS}px "Kalam", cursive`;
+    ctx.letterSpacing = '0.1px';
+    dLines.forEach((l, i) => ctx.fillText(l, RX + BPX, curY + BPY + dFS + i * dLH));
+    ctx.letterSpacing = '0px';
+
+    // Footer brand right
+    ctx.fillStyle = '#FF4D00';
+    ctx.font = '400 22px "Kalam", cursive';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'right';
+    ctx.fillText('MYDADI.IN', W - PAD, FY);
+    ctx.textAlign = 'left'; ctx.letterSpacing = '0px';
+
+    return canvas.toDataURL('image/png');
+  }
+
+  /* ── Share modal ── */
+  function showShareModal(rawDadiText, rawUserText) {
+    document.getElementById('dadi-share-modal')?.remove();
+    const text = _cleanText(rawDadiText);
+    const userText = rawUserText ? _cleanText(rawUserText) : '';
+    const url = 'https://www.mydadi.in';
+
+    const modal = document.createElement('div');
+    modal.className = 'dadi-share-modal';
+    modal.id = 'dadi-share-modal';
+    modal.innerHTML = `
+      <div class="dadi-share-box">
+        <div class="dadi-share-header">
+          <span class="dadi-share-title">Share this response</span>
+          <button class="dadi-share-x" id="ds-close">\u2715</button>
+        </div>
+        <div class="dadi-share-generating" id="ds-generating">Generating image\u2026</div>
+        <div class="dadi-share-img-wrap" id="ds-img-wrap" style="display:none"></div>
+        <div class="dadi-share-grid" id="ds-btns" style="display:none">
+          ${navigator.canShare ? '<button class="dadi-share-opt primary dadi-share-grid-wide" id="ds-native">\u2b06\ufe0f Share Image\u2026</button>' : ''}
+          <button class="dadi-share-opt" id="ds-download">\u2b07\ufe0f Download</button>
+          <button class="dadi-share-opt" id="ds-copyimg">\ud83d\udccb Copy Image</button>
+          <button class="dadi-share-opt" id="ds-wa">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.558 4.122 1.532 5.856L.057 23.57l5.865-1.54A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.032-1.39l-.36-.214-3.481.914.929-3.395-.235-.37A9.818 9.818 0 012.182 12C2.182 6.567 6.567 2.182 12 2.182S21.818 6.567 21.818 12 17.433 21.818 12 21.818z"/></svg>
+            WhatsApp
+          </button>
+          <button class="dadi-share-opt" id="ds-tw">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#000"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>
+            Twitter / X
+          </button>
+          <button class="dadi-share-opt" id="ds-link">\uD83D\uDD17 Copy Link</button>
+        </div>
+        <div class="dadi-share-status" id="ds-status"></div>
+      </div>`;
+
+    document.body.appendChild(modal);
+
+    const setStatus = (msg, color) => {
+      const el = modal.querySelector('#ds-status');
+      el.textContent = msg; el.style.color = color || '#2e7d32';
+    };
+
+    modal.querySelector('#ds-close').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    let _imgDataUrl = null;
+    setTimeout(async () => {
+      try {
+        _imgDataUrl = await _generateCard(text, userText);
+        const img = document.createElement('img');
+        img.src = _imgDataUrl; img.alt = 'Share card';
+        modal.querySelector('#ds-generating').style.display = 'none';
+        const wrap = modal.querySelector('#ds-img-wrap');
+        wrap.appendChild(img); wrap.style.display = 'block';
+        modal.querySelector('#ds-btns').style.display = 'grid';
+      } catch (_) { modal.querySelector('#ds-generating').textContent = 'Could not generate image.'; }
+    }, 30);
+
+    modal.querySelector('#ds-native')?.addEventListener('click', async () => {
+      if (!_imgDataUrl) return;
+      try {
+        const blob = await (await fetch(_imgDataUrl)).blob();
+        const file = new File([blob], 'dadi-ai.png', { type: 'image/png' });
+        await navigator.share(navigator.canShare({ files: [file] }) ? { files: [file], title: 'Dadi AI', url } : { title: 'Dadi AI', url });
+      } catch (_) {}
+    });
+
+    modal.querySelector('#ds-download').addEventListener('click', () => {
+      if (!_imgDataUrl) return;
+      const a = document.createElement('a');
+      a.href = _imgDataUrl; a.download = 'dadi-ai.png'; a.click();
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'download' });
+    });
+
+    modal.querySelector('#ds-copyimg').addEventListener('click', async () => {
+      if (!_imgDataUrl) return;
+      try {
+        const blob = await (await fetch(_imgDataUrl)).blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setStatus('\u2713 Image copied!');
+        if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'copy_image' });
+      } catch (_) { setStatus('Copy failed — try Download.', '#c0392b'); }
+    });
+
+    modal.querySelector('#ds-wa').addEventListener('click', () => {
+      window.open('https://wa.me/?text=' + encodeURIComponent(url), '_blank');
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'whatsapp' });
+    });
+
+    modal.querySelector('#ds-tw').addEventListener('click', () => {
+      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}`, '_blank');
+      if (typeof gtag !== 'undefined') gtag('event', 'share_message', { platform: 'twitter' });
+    });
+
+    modal.querySelector('#ds-link').addEventListener('click', async e => {
+      try { await navigator.clipboard.writeText(url); } catch (_) {}
+      setStatus('\u2713 Link copied!');
+      e.target.textContent = '\u2713 Copied!';
+      setTimeout(() => { if (e.target) e.target.textContent = '\uD83D\uDD17 Copy Link'; }, 2000);
+    });
+  }
+
+  function findUserMessageForArticle(dadiArticle) {
+    const all = Array.from(document.querySelectorAll('[role="article"]'));
+    const idx = all.indexOf(dadiArticle);
+    if (idx <= 0) return '';
+    return (all[idx - 1].innerText || all[idx - 1].textContent || '').trim();
+  }
+
+  /* ── Inject share + meme buttons into each Dadi message ── */
   const _decoratedArticles = new WeakSet();
 
   function injectShareButtons() {
     if (isLoginPage()) return;
 
-    // Target every message article. We skip:
-    // 1. Already-decorated articles
-    // 2. Articles too short to meme-ify
-    // 3. Articles inside the input area (textarea ancestor)
     document.querySelectorAll('[role="article"]').forEach(article => {
       if (_decoratedArticles.has(article)) return;
-      if (article.querySelector('.dadi-meme-btn')) { _decoratedArticles.add(article); return; }
+      if (article.querySelector('.dadi-share-btn, .dadi-meme-btn')) { _decoratedArticles.add(article); return; }
 
-      // Skip if article is inside the input area
+      // Skip articles inside the input area
       let _el = article.parentElement;
       for (let _i = 0; _i < 8; _i++) {
         if (!_el || _el === document.body) break;
@@ -989,22 +1250,39 @@
 
       _decoratedArticles.add(article);
 
-      // Find the action bar — try Chainlit's known containers, fall back to article itself
-      const bar = article.querySelector('.-ml-1\\.5, [class~="-ml-1.5"]')
+      // Find the action bar — try Chainlit's known containers, fall back to article
+      const bar = article.querySelector('.-ml-1\\.5')
+        || article.querySelector('[class~="-ml-1.5"]')
         || article.querySelector('[class*="-ml-"]')
         || article.querySelector('[class*="action"]')
         || article;
 
-      // Meme button
+      // Copy styling from an existing Chainlit button so icons look native
+      const existingBtn = bar.querySelector('button:not(.dadi-share-btn):not(.dadi-meme-btn)');
+      const btnCls = existingBtn
+        ? existingBtn.className + ' '
+        : 'inline-flex items-center justify-center h-9 w-9 ';
+
+      // Share button (canvas card)
+      const shareBtn = document.createElement('button');
+      shareBtn.className = btnCls + 'dadi-share-btn';
+      shareBtn.title = 'Share this response';
+      shareBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`;
+      shareBtn.onclick = e => {
+        e.stopPropagation();
+        showShareModal(text, findUserMessageForArticle(article));
+      };
+      bar.appendChild(shareBtn);
+
+      // Meme button (canvas meme)
       const memeBtn = document.createElement('button');
-      memeBtn.className = 'dadi-meme-btn';
-      memeBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;margin-left:4px;';
-      memeBtn.textContent = '🪄 Share Kar - Dadi ne bola';
+      memeBtn.className = btnCls + 'dadi-meme-btn';
+      memeBtn.title = 'Make a meme';
+      memeBtn.innerHTML = '<img src="/public/meme_icon.png" style="width:18px;height:18px;object-fit:contain;display:block;" alt="meme">';
       memeBtn.onclick = e => {
         e.stopPropagation();
         showMemeModal(text);
       };
-
       bar.appendChild(memeBtn);
     });
   }

@@ -1931,9 +1931,6 @@ async def on_message(message: cl.Message):
     elements = [cl.Image(path=image_path, name="dadi", display="inline")]
 
     msg.elements = elements
-    is_error = full_reply.startswith("*Arre!* Something")
-    if not _is_story_request(user_text) and not is_error:
-        msg.actions = [cl.Action(name="share_card", payload={}, label="📤 Share Kar")]
 
     await msg.update()
     messages.append({"role": "assistant", "content": full_reply})
@@ -2062,47 +2059,11 @@ async def on_roast_me(action: cl.Action):
         await msg.stream_token(full_roast)
 
     msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
-    msg.actions = [cl.Action(name="share_card", payload={}, label="📤 Share Kar")]
     await msg.update()
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
     messages.append({"role": "assistant", "content": full_roast})
     cl.user_session.set("messages", messages)
-
-    await action.remove()
-
-
-@cl.action_callback("share_card")
-async def on_share_card(action: cl.Action):
-    messages = cl.user_session.get("messages", [])
-
-    # Pull the last assistant reply and the user message before it
-    dadi_text, user_text = "", ""
-    for m in reversed(messages):
-        if not dadi_text and m["role"] == "assistant":
-            dadi_text = m["content"]
-        elif dadi_text and m["role"] == "user":
-            user_text = m["content"]
-            break
-
-    if not dadi_text:
-        await cl.Message(content="Card banana muskil hai abhi. Ek baar phir try karo!", author="Dadi 👵🏾").send()
-        await action.remove()
-        return
-
-    card_id = f"{cl.context.session.id[:8]}_{int(time.time())}"
-    try:
-        loop = asyncio.get_event_loop()
-        png = await loop.run_in_executor(None, _generate_share_card, dadi_text, user_text)
-        await _save_card(card_id, png)
-        await cl.Message(
-            content=f"Yeh raha tera Dadi card! [Kholo aur share karo →](/share/{card_id})",
-            author="Dadi 👵🏾",
-            elements=[cl.Image(url=f"/card/{card_id}", name="share_card", display="inline")],
-        ).send()
-    except Exception as e:
-        print(f"[Share] Card generation failed: {e}")
-        await cl.Message(content="Card banana muskil ho gaya beta. Dobara try karo!", author="Dadi 👵🏾").send()
 
     await action.remove()
 
