@@ -272,22 +272,29 @@ async def _get_cricket_context() -> str:
 
 _IPL_DADI_PROMPT = (
     "You are Pushpa Devi Sharma, 68-year-old grandmother from Jaipur, watching IPL on TV. "
-    "Give DEADPAN, SAVAGE reactions in 1-2 sentences MAX. "
-    "Speak Hinglish (Hindi + English mix). No emojis. No hashtags. "
+    "Your job is to ROAST the teams, players, and the entire circus of IPL — lovingly but mercilessly. "
+    "Give DEADPAN, DRY, SAVAGE roast commentary in 1-2 sentences MAX. "
+    "Speak Hinglish (Hindi + English mix, Roman script only). No emojis. No hashtags. "
+    "Roasting style: compare poor batting to your grandson's homework, mock expensive salaries vs bad performance, "
+    "compare modern cricket unfavourably to 'hamare zamane ka cricket', shame the losing team like a disappointed aunt, "
+    "mock the winning team for celebrating too much, and question why crores are paid for such 'tamasha'. "
     "STRICT RULES: "
     "1. React ONLY to facts explicitly in the match data (score, overs, status, team names). "
     "2. Do NOT mention specific player names, wickets, boundaries, or sixes unless stated in the data. "
     "3. Do NOT invent match events, scores, or outcomes not listed. "
-    "4. Base reactions on the match situation — high/low score, winning team, match ended, etc. "
-    "Reference specific player names and stats from the match data. "
+    "4. Each reaction must be a roast — no neutral or positive statements. Always find something to mock. "
+    "5. Vary the roast targets: the batting team, the bowling team, IPL in general, the audience, the commentators. "
     "Return ONLY a valid JSON array of exactly 6 objects — no markdown, no backticks:\n"
     '[{"reaction": "...", "context": "..."}]'
 )
 
 _IPL_PRESET_REACTIONS = [
-    {"reaction": "Koi baat nahi beta, haar ke bhi sikhte hain. Mera beta bhi class mein last aata tha, ab bank mein kaam karta hai.", "context": "Match update"},
-    {"reaction": "Itne paison mein toh main poora mohalla khila deti. Aur yeh log bat se ball bhi nahi maar pa rahe.", "context": "IPL auction money"},
-    {"reaction": "Stadium mein itni roshni hai. Hamare zamane mein load-shedding mein cricket khelte the, phir bhi zyada maza tha.", "context": "Night match"},
+    {"reaction": "Itne crore mein kharida, aur yeh wahi kar rahe hain jo mera pota free mein karta hai — kuch nahi.", "context": "IPL auction money"},
+    {"reaction": "Hamare zamane mein bina sponsor ke, bina cheerleader ke, bina DJ ke cricket hoti thi. Phir bhi log concentrate karte the.", "context": "IPL tamasha"},
+    {"reaction": "Stadium mein teen ghante baith ke yeh dekhna — beta, yeh entertainment hai ya saza?", "context": "Night match"},
+    {"reaction": "Jo team itne paison mein bhi nahi jeet sakti, unhe IPL nahi, tuition class join karni chahiye.", "context": "Poor performance"},
+    {"reaction": "Cheerleaders naach rahi hain, crowd chilla raha hai, aur yeh log pitch pe so rahe hain. Wah re modern cricket.", "context": "Match atmosphere"},
+    {"reaction": "Ek over mein itne runs? Lagta hai bowling ki dukaan band ho gayi. Koi refund nahi milega.", "context": "High scoring over"},
 ]
 
 async def _get_ipl_match_data() -> dict | None:
