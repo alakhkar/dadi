@@ -962,66 +962,47 @@
     setTimeout(generate, 30);
   }
 
-/* ── Inject share button into Chainlit action bar ── */
-  const _decoratedBars = new WeakSet();
-
-  // Walk up from a button to the outer action bar (has class "-ml-1.5")
-  function getOuterActionBar(btn) {
-    let el = btn.parentElement;
-    while (el && el !== document.body) {
-      if (el.classList && el.classList.contains('-ml-1.5')) return el;
-      el = el.parentElement;
-    }
-    return null; // only inject into proper message action bars
-  }
-
-  // From the action bar, find the associated article by walking up and checking siblings
-  function findArticleForBar(bar) {
-    let current = bar;
-    for (let i = 0; i < 10; i++) {
-      const parent = current.parentElement;
-      if (!parent || parent === document.body) break;
-      for (const sibling of parent.children) {
-        if (sibling === current || sibling.contains(current)) continue;
-        if (sibling.getAttribute('role') === 'article') return sibling;
-        const nested = sibling.querySelector('[role="article"]');
-        if (nested) return nested;
-      }
-      current = parent;
-    }
-    return null;
-  }
+/* ── Inject meme button into each Dadi message ── */
+  const _decoratedArticles = new WeakSet();
 
   function injectShareButtons() {
     if (isLoginPage()) return;
 
-    // Find every .h-9 action button, resolve its outer bar, inject once per bar
-    document.querySelectorAll('button.h-9:not(.dadi-share-btn):not(.dadi-meme-btn)').forEach(btn => {
-      const bar = getOuterActionBar(btn);
-      if (!bar || _decoratedBars.has(bar)) return;
-      if (bar.querySelector('.dadi-share-btn')) { _decoratedBars.add(bar); return; }
+    // Target every message article. We skip:
+    // 1. Already-decorated articles
+    // 2. Articles too short to meme-ify
+    // 3. Articles inside the input area (textarea ancestor)
+    document.querySelectorAll('[role="article"]').forEach(article => {
+      if (_decoratedArticles.has(article)) return;
+      if (article.querySelector('.dadi-meme-btn')) { _decoratedArticles.add(article); return; }
 
-      // Skip if bar is inside the input area (shares an ancestor with a textarea)
-      let _el = bar.parentElement;
-      for (let _i = 0; _i < 6; _i++) {
-        if (!_el) break;
+      // Skip if article is inside the input area
+      let _el = article.parentElement;
+      for (let _i = 0; _i < 8; _i++) {
+        if (!_el || _el === document.body) break;
         if (_el.querySelector('textarea, input[type="file"]')) return;
         _el = _el.parentElement;
       }
 
-      const article = findArticleForBar(bar);
-      if (!article || (article.innerText || article.textContent || '').trim().length < 40) return;
+      const text = (article.innerText || article.textContent || '').trim();
+      if (text.length < 40) return;
 
-      _decoratedBars.add(bar);
+      _decoratedArticles.add(article);
+
+      // Find the action bar — try Chainlit's known containers, fall back to article itself
+      const bar = article.querySelector('.-ml-1\\.5, [class~="-ml-1.5"]')
+        || article.querySelector('[class*="-ml-"]')
+        || article.querySelector('[class*="action"]')
+        || article;
 
       // Meme button
       const memeBtn = document.createElement('button');
       memeBtn.className = 'dadi-meme-btn';
-      memeBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;';
+      memeBtn.style.cssText = 'cursor:pointer;font-size:0.78rem;font-weight:600;color:#8B1A1A;background:#FEF0E7;border:1px solid #e8c9b0;border-radius:8px;padding:4px 10px;white-space:nowrap;font-family:inherit;line-height:1.4;margin-left:4px;';
       memeBtn.textContent = '🪄 Share Kar - Dadi ne bola';
       memeBtn.onclick = e => {
         e.stopPropagation();
-        showMemeModal((article.innerText || article.textContent || '').trim());
+        showMemeModal(text);
       };
 
       bar.appendChild(memeBtn);
