@@ -147,12 +147,7 @@ def get_calendar_context() -> str:
 
     if upcoming_festivals:
         for days, name, flavour in upcoming_festivals[:3]:
-            if days == 1:
-                when = "tomorrow"
-            elif days <= 7:
-                when = f"in {days} days"
-            else:
-                when = f"in {days} days"
+            when = "tomorrow" if days == 1 else f"in {days} days"
             lines.append(f"UPCOMING: {name} {when} — {flavour}")
 
     return "\n".join(lines)

@@ -4,10 +4,9 @@ import os
 import json
 import random
 import string
-import uuid
 import io
-import textwrap
 import re
+import time
 import asyncio
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -180,7 +179,6 @@ def _is_story_request(text: str) -> bool:
 
 async def _get_cricket_context() -> str:
     """Fetch live matches + IPL points table from CricAPI. Cached for 120s."""
-    import time
     cricapi_key = os.environ.get("CRICAPI_KEY", "")
     if not cricapi_key:
         return ""
@@ -289,7 +287,6 @@ _IPL_PRESET_REACTIONS = [
 
 async def _get_ipl_match_data() -> dict | None:
     """Fetch structured IPL match data. Cached for 120s."""
-    import time
     cricapi_key = os.environ.get("CRICAPI_KEY", "")
     if not cricapi_key:
         return None
@@ -392,7 +389,6 @@ async def _get_ipl_match_data() -> dict | None:
 
 async def _get_ipl_commentary(match_data: dict) -> list[dict]:
     """Generate Dadi's IPL commentary via LLM. Cached until overs change."""
-    import time, json as _json2
     if not match_data or not match_data.get("matches"):
         return _IPL_PRESET_REACTIONS
 
@@ -432,7 +428,6 @@ async def _get_ipl_commentary(match_data: dict) -> list[dict]:
     match_summary = "\n".join(summary_lines)
 
     try:
-        from langchain_core.messages import SystemMessage, HumanMessage
         llm_msgs = [
             SystemMessage(content=_IPL_DADI_PROMPT),
             HumanMessage(content=f"Live match data:\n{match_summary}\n\nGenerate 6 reactions. Return ONLY JSON array."),
@@ -444,7 +439,7 @@ async def _get_ipl_commentary(match_data: dict) -> list[dict]:
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
-        parsed = _json2.loads(text.strip())
+        parsed = json.loads(text.strip())
         if isinstance(parsed, list) and parsed:
             _IPL_COMMENTARY_CACHE["commentary"]      = parsed
             _IPL_COMMENTARY_CACHE["overs_snapshot"]  = overs_snapshot
@@ -730,7 +725,6 @@ except Exception as e:
 # 7. OTP REST ENDPOINT
 # ─────────────────────────────────────────────
 try:
-    import asyncio as _asyncio
     from chainlit.server import app as _cl_app
     import hmac as _hmac
     from fastapi import Request
@@ -751,7 +745,7 @@ try:
             return JSONResponse({"error": "Could not save code, please try again"}, status_code=500)
         if not await _send_otp_email(email, code):
             return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
-        _asyncio.create_task(analytics.log_otp_requested(email))
+        asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
 
     @_cl_app.post("/auth/analytics-data")
@@ -763,36 +757,7 @@ try:
         provided = body.get("token", "")
         if not ANALYTICS_ADMIN_TOKEN or provided != ANALYTICS_ADMIN_TOKEN:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
-
-        views = [
-            "v_kpi_summary", "v_dau", "v_user_type_ratio", "v_rag_usage",
-            "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
-        ]
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            view_responses, audit_response = await _asyncio.gather(
-                _asyncio.gather(*[
-                    client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
-                    for v in views
-                ], return_exceptions=True),
-                client.get(
-                    f"{SUPABASE_URL}/rest/v1/analytics_events"
-                    "?event_name=eq.message_sent&order=created_at.desc&limit=500",
-                    headers=SUPA_HEADERS,
-                ),
-            )
-
-        data = {}
-        for view, resp in zip(views, view_responses):
-            if isinstance(resp, Exception):
-                data[view] = []
-            elif resp.status_code == 200:
-                data[view] = resp.json()
-            else:
-                data[view] = []
-
-        data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
-
-        return JSONResponse(data)
+        return JSONResponse(await _fetch_analytics_data())
 
     _ANALYTICS_LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -860,8 +825,8 @@ try:
             "v_top_starters", "v_otp_funnel", "v_memory_extractions", "v_session_stats",
         ]
         async with httpx.AsyncClient(timeout=15.0) as client:
-            view_responses, audit_response = await _asyncio.gather(
-                _asyncio.gather(*[
+            view_responses, audit_response = await asyncio.gather(
+                asyncio.gather(*[
                     client.get(f"{SUPABASE_URL}/rest/v1/{v}?select=*", headers=SUPA_HEADERS)
                     for v in views
                 ], return_exceptions=True),
@@ -882,8 +847,7 @@ try:
         data["message_audit"] = audit_response.json() if audit_response.status_code == 200 else []
         return data
 
-    import json as _json
-    _MANIFEST_JSON = _json.dumps({
+    _MANIFEST_JSON = json.dumps({
         "name": "Dadi AI",
         "short_name": "Dadi AI",
         "description": "Your wise AI Indian grandmother — advice, recipes, stories, and desi wisdom.",
@@ -1243,7 +1207,7 @@ setInterval(async () => {
     class _AnalyticsMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             if request.url.path == "/manifest.json":
-                return JSONResponse(content=_json.loads(_MANIFEST_JSON), media_type="application/manifest+json")
+                return JSONResponse(content=json.loads(_MANIFEST_JSON), media_type="application/manifest+json")
             if request.url.path == "/sw.js":
                 return _XMLResponse(content=_SW_JS, media_type="application/javascript")
             if request.url.path == "/sitemap.xml":
@@ -1253,7 +1217,6 @@ setInterval(async () => {
             if request.url.path == "/ipl":
                 return _HTMLResponse(_IPL_PAGE_HTML)
             if request.url.path == "/ipl/data":
-                import time as _time, json as _json3
                 match_data = await _get_ipl_match_data()
                 commentary = await _get_ipl_commentary(match_data or {})
                 snap_parts = []
@@ -1266,7 +1229,7 @@ setInterval(async () => {
                     "points_table":   (match_data or {}).get("points_table", []),
                     "commentary":     commentary,
                     "overs_snapshot": "|".join(snap_parts),
-                    "fetched_at":     int(_time.time()),
+                    "fetched_at":     int(time.time()),
                 }
                 return JSONResponse(payload)
             if request.url.path == "/ipl/debug":
@@ -1466,61 +1429,10 @@ p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}</style>
             await _set_daily_optin(email, value)
         return RedirectResponse(url=f"/profile?email={email}", status_code=303)
 
-    # ── Share card endpoints ──────────────────────────────────────────────────
-    from fastapi.responses import Response as _BinaryResponse
-
-    @_cl_app.get("/card/{card_id}")
-    async def serve_card(card_id: str):
-        png = await _load_card(card_id)
-        if not png:
-            return JSONResponse({"error": "Card not found"}, status_code=404)
-        return _BinaryResponse(content=png, media_type="image/png", headers={
-            "Cache-Control": "public, max-age=86400",
-        })
-
-    @_cl_app.get("/share/{card_id}")
-    async def share_page(card_id: str, request: Request):
-        png = await _load_card(card_id)
-        if not png:
-            return JSONResponse({"error": "Card not found"}, status_code=404)
-        base = str(request.base_url).rstrip("/")
-        img_url  = f"{base}/card/{card_id}"
-        share_url = f"{base}/share/{card_id}"
-        html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dadi Ne Bola — mydadi.in</title>
-<meta property="og:title" content="Dadi Ne Bola">
-<meta property="og:description" content="Chat with Dadi — she will roast you, love you, and fix you. mydadi.in">
-<meta property="og:image" content="{img_url}">
-<meta property="og:image:width" content="800">
-<meta property="og:image:height" content="480">
-<meta property="og:url" content="{share_url}">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="{img_url}">
-<style>
-  body{{margin:0;background:#FDF6F0;font-family:Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}}
-  img{{max-width:100%;border-radius:12px;box-shadow:0 8px 40px rgba(139,26,26,.15)}}
-  a.cta{{display:inline-block;margin-top:20px;padding:12px 28px;background:#8B1A1A;color:#fff;border-radius:8px;text-decoration:none;font-size:1rem}}
-  p{{color:#9e7a5a;font-size:.85rem;margin-top:12px}}
-</style>
-</head>
-<body>
-<img src="{img_url}" alt="Dadi Ne Bola">
-<a class="cta" href="/">Aaja, Dadi se baat kar →</a>
-<p>mydadi.in — She will roast you. She will fix you.</p>
-</body>
-</html>"""
-        return HTMLResponse(html)
-
     print("[Auth] OTP endpoint registered ✓")
     print("[Analytics] Data endpoint registered at POST /auth/analytics-data ✓")
     print("[Analytics] Dashboard middleware registered at GET/POST /auth/analytics ✓")
     print("[Profile] Profile page registered at GET/POST /profile ✓")
-    print("[Share] Card endpoints registered at /card/{id} and /share/{id} ✓")
 except Exception as e:
     print(f"[Auth] OTP endpoint not available: {e}")
 
@@ -1529,8 +1441,7 @@ except Exception as e:
 # ─────────────────────────────────────────────
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
-    import asyncio as _asyncio
-    loop = _asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
     # Guest skip
     if password == "guest":
         guest_id = username if username.startswith("guest_") else f"guest_{username}"
@@ -1841,7 +1752,6 @@ def _generate_share_card(dadi_text: str, user_text: str = "") -> bytes:
 
 @cl.set_starters
 async def set_starters():
-    import random
     return [
         cl.Starter(label=label, message=message)
         for label, message in random.choice(STARTER_SETS)
@@ -2020,10 +1930,6 @@ async def on_message(message: cl.Message):
     image_path = _pick_dadi_image(user_text, full_reply)
     elements = [cl.Image(path=image_path, name="dadi", display="inline")]
 
-    # Add Share + Roast buttons on normal replies (not story chapters, not errors)
-    is_story_msg = _is_story_request(user_text)
-    is_error     = full_reply.startswith("*Arre!* Something")
-    is_roast_req = any(w in user_text.lower() for w in ["roast me", "roast karo", "mujhe roast"])
     msg.elements = elements
 
     await msg.update()
