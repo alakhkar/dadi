@@ -407,7 +407,7 @@ async def _get_ipl_match_data() -> dict | None:
         return None
 
 
-async def _get_ipl_commentary(match_data: dict) -> list[dict]:
+async def _get_ipl_commentary(match_data: dict, force: bool = False) -> list[dict]:
     """Generate Dadi's IPL commentary via LLM. Cached until overs change."""
     if not match_data or not match_data.get("matches"):
         return _IPL_PRESET_REACTIONS
@@ -424,7 +424,8 @@ async def _get_ipl_commentary(match_data: dict) -> list[dict]:
     # After match ends, keep commentary for 2 hours (no point regenerating)
     commentary_ttl = 7200 if match_ended else 600
     if (
-        _IPL_COMMENTARY_CACHE["commentary"]
+        not force
+        and _IPL_COMMENTARY_CACHE["commentary"]
         and _IPL_COMMENTARY_CACHE["overs_snapshot"] == overs_snapshot
         and now - _IPL_COMMENTARY_CACHE["ts"] < commentary_ttl
     ):
@@ -1526,8 +1527,9 @@ setInterval(async () => {
                 })
             if request.url.path == "/ipl/data":
                 print("[IPL] /ipl/data hit")
+                force_refresh = request.query_params.get("force", "0") == "1"
                 match_data = await _get_ipl_match_data()
-                commentary = await _get_ipl_commentary(match_data or {})
+                commentary = await _get_ipl_commentary(match_data or {}, force=force_refresh)
                 snap_parts = []
                 if match_data:
                     for m in match_data.get("matches", []):
