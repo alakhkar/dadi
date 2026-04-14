@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dadi ka IPL — mydadi.in</title>
+<meta name="description" content="Live IPL scores with Dadi's deadpan Hinglish commentary. She will roast your favourite team.">
+<meta property="og:title" content="Dadi ka IPL">
+<meta property="og:description" content="Live IPL commentary your grandmother never asked for.">
+<meta property="og:url" content="https://www.mydadi.in/ipl">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:linear-gradient(135deg,#1a0a0a 0%,#2d0f0f 30%,#1a1a2e 65%,#0f0f23 100%);
+  background-attachment:fixed;
+  font-family:'DM Sans',sans-serif;color:#fff;min-height:100vh;
+}
+/* Fixed orb layer — identical to login page */
+.orbs{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 600px 500px at 15% 20%,rgba(139,26,26,0.18) 0%,transparent 70%),
+    radial-gradient(ellipse 500px 400px at 80% 75%,rgba(80,20,80,0.15) 0%,transparent 70%),
+    radial-gradient(ellipse 400px 350px at 60% 10%,rgba(26,26,80,0.18) 0%,transparent 70%);
+}
+.page-wrap{position:relative;z-index:1}
+/* Top bar: logo centred */
+.top-bar{padding:28px 24px 0;display:flex;justify-content:center}
+.brand-logo{height:80px;width:auto;display:block}
+/* Shimmer divider — same as login */
+.shimmer{
+  display:block;height:2px;width:60%;margin:16px auto 0;border-radius:99px;
+  background:linear-gradient(90deg,transparent,rgba(220,80,80,0.7),rgba(255,200,200,0.9),rgba(220,80,80,0.7),transparent);
+}
+/* Hero: 2-col on desktop (scoreboard + Dadi image), stacked on mobile */
+.hero{padding:28px 20px 0;text-align:center;position:relative}
+.hero-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:720px){
+  .hero-inner{grid-template-columns:1fr 340px;align-items:center;text-align:left;gap:40px}
+  .live-badge{justify-content:flex-start}
+}
+.hero-left{padding-bottom:32px}
+.hero-right{
+  position:relative;display:flex;align-items:flex-end;justify-content:center;
+  min-height:280px;
+}
+.hero-right img{
+  height:320px;width:auto;object-fit:contain;object-position:bottom center;
+  filter:drop-shadow(0 0 50px rgba(139,26,26,0.4));display:block;
+}
+.hero-right-glow{
+  position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:220px;height:70px;
+  background:radial-gradient(ellipse 100% 100% at 50% 100%,rgba(139,26,26,0.45),transparent);
+  pointer-events:none;
+}
+@media(max-width:719px){.hero-right{display:none}}
+/* Live badge */
+.live-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(139,26,26,0.2);border:1px solid rgba(220,80,80,0.3);border-radius:100px;padding:6px 16px;margin-bottom:16px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1.5s infinite}
+.live-text{font-size:12px;color:#ff9999;font-weight:600;letter-spacing:1px}
+h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 0 4px;line-height:1.2}
+.subtitle{font-size:14px;color:rgba(255,255,255,0.5);margin:0 0 24px}
+/* Scoreboard glass card — same glass as login left panel */
+.scoreboard{
+  background:rgba(255,255,255,0.06);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:16px;padding:20px 24px;max-width:420px;margin:0 auto;
+}
+@media(min-width:720px){.scoreboard{margin:0}}
+.scores{display:flex;justify-content:space-between;align-items:center}
+.team-name{font-size:28px;font-weight:800}
+.team-score{font-size:22px;font-weight:700;margin-top:2px}
+.team-overs{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px}
+.vs{font-size:13px;font-weight:700;color:rgba(255,255,255,0.3);padding:4px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:8px}
+.match-status{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;color:#ff7070;font-weight:600}
+.match-venue{font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px}
+.match-name-display{font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px;font-weight:500}
+/* Content section */
+.content{padding:32px 16px 40px;max-width:500px;margin:0 auto}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:0 0 20px;position:relative;z-index:1}
+.section-title{font-family:'Tiro Devanagari Hindi',serif;font-size:22px;color:#fff}
+/* Refresh button — same red gradient as login submit */
+.refresh-btn{
+  padding:8px 16px;border-radius:10px;border:none;
+  background:linear-gradient(135deg,#8B1A1A 0%,#c0392b 100%);
+  color:#fff;font-size:12px;font-weight:700;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:box-shadow 0.2s,transform 0.15s;
+  box-shadow:0 4px 14px rgba(139,26,26,0.4);letter-spacing:0.03em;
+}
+.refresh-btn:hover{box-shadow:0 6px 22px rgba(139,26,26,0.55);transform:translateY(-1px)}
+.refresh-btn:disabled{background:rgba(139,26,26,0.2);color:rgba(255,150,150,0.6);cursor:default;box-shadow:none;transform:none}
+/* Reaction cards — glassmorphism */
+.reactions{display:flex;flex-direction:column;gap:12px}
+.reaction-card{
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;padding:18px 20px;cursor:pointer;transition:all 0.2s;
+}
+.reaction-card:hover{background:rgba(255,255,255,0.09);border-color:rgba(220,80,80,0.35);box-shadow:0 4px 24px rgba(139,26,26,0.2)}
+.reaction-context{font-size:10px;font-weight:700;color:#ff9999;letter-spacing:0.5px;margin-bottom:8px;text-transform:uppercase}
+.reaction-text{font-family:'Tiro Devanagari Hindi',serif;font-size:16px;line-height:1.7;color:rgba(255,255,255,0.9)}
+.copy-hint{font-size:10px;color:rgba(255,255,255,0.25);margin-top:10px;display:flex;align-items:center;gap:4px}
+.highlights{margin-top:32px}
+.highlights h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:0 0 14px}
+.highlights-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.highlight-card{
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:12px;padding:14px 16px;
+}
+.hl-label{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:4px}
+.hl-value{font-size:22px;font-weight:800}
+.hl-sub{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px}
+.points-table{margin-top:24px}
+.points-table h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:0 0 14px}
+.pt-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.05);
+  border-radius:8px;margin-bottom:6px;font-size:13px;transition:background 0.15s;
+}
+.pt-row:hover{background:rgba(255,255,255,0.07)}
+.pt-team{font-weight:600;color:rgba(255,255,255,0.9)}
+.pt-stats{color:rgba(255,255,255,0.4);font-size:12px}
+.pt-pts{font-weight:700;color:#ff9999;min-width:30px;text-align:right}
+/* CTA box — red glass, matches login button palette */
+.cta-box{
+  margin-top:32px;
+  background:rgba(139,26,26,0.12);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(220,80,80,0.2);
+  border-radius:16px;padding:24px 20px;text-align:center;
+}
+.cta-box h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:12px 0 6px}
+.cta-box p{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;line-height:1.5}
+.cta-link{
+  display:inline-block;padding:12px 28px;border-radius:10px;
+  background:linear-gradient(135deg,#8B1A1A 0%,#c0392b 100%);
+  color:#fff;text-decoration:none;font-weight:700;font-size:14px;
+  box-shadow:0 4px 20px rgba(139,26,26,0.4);transition:box-shadow 0.2s,transform 0.15s;
+}
+.cta-link:hover{box-shadow:0 6px 28px rgba(139,26,26,0.55);transform:translateY(-1px)}
+.footer{text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(255,255,255,0.2)}
+.error-box{padding:20px;text-align:center;color:rgba(255,255,255,0.4);font-size:14px;margin:20px 0}
+.loading-box{padding:20px;text-align:center;color:#ff9999;font-size:14px}
+.no-match-box{padding:40px 20px;text-align:center}
+.no-match-box p{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:rgba(255,255,255,0.7);line-height:1.6}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#8B1A1A;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+</style>
+</head>
+<body>
+<!-- Orb layer — identical to login page -->
+<div class="orbs"></div>
+
+<div class="page-wrap">
+  <!-- Top bar: Dadi logo -->
+  <div class="top-bar">
+    <a href="/"><img src="/public/logo_dark.png" alt="Dadi AI" class="brand-logo"></a>
+  </div>
+  <!-- Shimmer divider under logo -->
+  <span class="shimmer"></span>
+
+  <!-- Hero: left (badge + title + scoreboard) + right (Dadi image, desktop only) -->
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="hero-left">
+        <div class="live-badge">
+          <div class="live-dot" id="live-dot"></div>
+          <span class="live-text" id="live-text">IPL 2026</span>
+        </div>
+        <h1>Dadi ka IPL</h1>
+        <p class="subtitle">Cricket commentary your grandmother never asked for</p>
+        <div class="scoreboard" id="scoreboard">
+          <div class="loading-box">Dadi TV on kar rahi hai...</div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <img id="dadi-hero-img" src="/public/images/dadi.png" alt="Dadi">
+        <div class="hero-right-glow"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="section-header" style="margin-top:8px;">
+      <h2 class="section-title">&#x1F475;&#x1F3FE; Dadi bol rahi hai...</h2>
+      <button class="refresh-btn" id="refresh-btn" onclick="refreshData()">Aur sunao</button>
+    </div>
+    <div class="reactions" id="reactions">
+      <div class="loading-box">Dadi soch rahi hai...</div>
+    </div>
+    <div id="highlights-section"></div>
+    <div id="points-section"></div>
+    <div class="cta-box">
+      <div style="font-size:28px">&#x1F475;&#x1F3FE;</div>
+      <h3>Dadi se baat karo</h3>
+      <p>IPL hi nahi, life ke baare mein bhi Dadi ke paas opinion hai</p>
+      <a href="/" class="cta-link">Chat with Dadi &rarr;</a>
+    </div>
+    <div class="footer">mydadi.in &bull; Dadi AI &bull; Made with pyaar &amp; thoda masala</div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+// Randomly pick a Dadi hero image — same pool as login page
+(function() {
+  const _imgs = [
+    '/public/images/dadi.png',
+    '/public/images/dadi_dancing.png',
+    '/public/images/dadi_karate.png',
+    '/public/images/dadi_dancing_with_smirk.png',
+    '/public/images/dadi kicking with smirk.png',
+    '/public/images/dadi picking flowers.png',
+    '/public/images/dadi reading book.png',
+    '/public/images/dadi tea.png',
+  ];
+  const el = document.getElementById('dadi-hero-img');
+  if (el) el.src = _imgs[Math.floor(Math.random() * _imgs.length)];
+})();
+
+let lastOversSnapshot = '';
+let isRefreshing = false;
+let currentScoreData = null;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function _iplWrapText(ctx, text, maxW) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else { line = test; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+function _iplClipText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let clipped = text;
+  while (clipped.length > 1 && ctx.measureText(clipped + '\u2026').width > maxW)
+    clipped = clipped.slice(0, -1);
+  return clipped + '\u2026';
+}
+
+function _iplRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+async function generateIPLShareCard(dadiText, context, scoreData) {
+  await document.fonts.ready;
+  const W = 1080, LW = 380, PAD = 48;
+  const BW = W - LW - PAD * 2, BPX = 28, BPY = 20;
+  const _pre = document.createElement('canvas');
+  _pre.width = W; _pre.height = 100;
+  const _pc = _pre.getContext('2d');
+
+  // Measure Dadi text with shrinking font
+  let dFS = 26, dLH, dLines;
+  while (dFS > 14) {
+    _pc.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+    dLH = Math.round(dFS * 1.6);
+    dLines = _iplWrapText(_pc, dadiText, BW - BPX * 2);
+    if (106 + 200 + 40 + BPY + dFS + (dLines.length - 1) * dLH + BPY + 100 + 60 <= 4000) break;
+    dFS -= 2;
+  }
+  dLH = Math.round(dFS * 1.6);
+  _pc.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+  dLines = _iplWrapText(_pc, dadiText, BW - BPX * 2);
+  const dBH = BPY + dFS + (dLines.length - 1) * dLH + BPY;
+  const SCORE_H = 200;
+  const H = Math.max(1080, 80 + SCORE_H + 40 + dBH + 120 + 60);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Left panel (white)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, LW, H);
+
+  // Dadi image
+  const dadiImages = ['/public/images/dadi.png', '/public/images/dadi_dancing.png', '/public/images/dadi_karate.png', '/public/images/dadi_dancing_with_smirk.png'];
+  await fetch(dadiImages[Math.floor(Math.random() * dadiImages.length)])
+    .then(r => r.blob()).then(blob => new Promise(resolve => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min((LW - 40) / img.naturalWidth, (H - 120) / img.naturalHeight);
+        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+        ctx.drawImage(img, (LW - dw) / 2, (H - dh) / 2 - 20, dw, dh);
+        URL.revokeObjectURL(url); resolve();
+      };
+      img.onerror = resolve; img.src = url;
+    })).catch(() => {});
+
+  // Red stripe
+  ctx.fillStyle = '#8B1A1A';
+  ctx.fillRect(LW - 6, 0, 6, H);
+
+  // Brand bottom-left
+  ctx.fillStyle = '#FF4D00';
+  ctx.font = '700 22px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('MYDADI.IN/IPL', LW / 2, H - 28);
+  ctx.textAlign = 'left';
+
+  // Right panel (dark)
+  ctx.fillStyle = '#0A0A0A';
+  ctx.fillRect(LW, 0, W - LW, H);
+  const RX = LW + PAD;
+
+  // "DADI KA IPL" header
+  ctx.fillStyle = '#FBBF24';
+  ctx.font = '700 22px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('DADI KA IPL', LW + (W - LW) / 2, 52);
+  ctx.textAlign = 'left';
+
+  // Divider
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(RX, 66, BW, 1);
+
+  // Score section
+  let curY = 90;
+  if (scoreData && scoreData.matches && scoreData.matches.length) {
+    const m = scoreData.matches[0];
+    const teams = m.teams || [];
+    const scores = m.score || [];
+    const t1 = teams[0] || '', t2 = teams[1] || '';
+    const scoreMap = {};
+    scores.forEach(s => { const inning = (s.inning || '').toLowerCase(); const matched = teams.find(t => inning.startsWith(t.toLowerCase())); scoreMap[matched || s.inning.split(' ')[0]] = s; });
+    const s1 = scoreMap[t1] || scores[0] || {};
+    const s2 = scoreMap[t2] || scores[1] || {};
+    const fmt = s => s.r !== undefined ? s.r + '/' + s.w : '--';
+    const ovs = s => s.o !== undefined ? '(' + s.o + ' ov)' : '';
+
+    // Score card background
+    _iplRoundRect(ctx, RX, curY, BW, SCORE_H, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fill();
+
+    const sY = curY + 36;
+    const teamMaxW = Math.floor(BW / 2) - 60; // max width per team name (leaves room for "vs")
+    // Team 1 (left)
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 22px "DM Sans", sans-serif';
+    ctx.fillText(_iplClipText(ctx, t1, teamMaxW), RX + 20, sY);
+    ctx.fillStyle = '#FBBF24'; ctx.font = '700 38px "DM Sans", sans-serif';
+    ctx.fillText(fmt(s1), RX + 20, sY + 46);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
+    ctx.fillText(ovs(s1), RX + 20, sY + 72);
+
+    // VS (center)
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '700 18px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('vs', LW + (W - LW) / 2, sY + 46);
+    ctx.textAlign = 'left';
+
+    // Team 2 (right)
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 22px "DM Sans", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(_iplClipText(ctx, t2, teamMaxW), RX + BW - 20, sY);
+    ctx.fillStyle = '#EF4444'; ctx.font = '700 38px "DM Sans", sans-serif';
+    ctx.fillText(fmt(s2), RX + BW - 20, sY + 46);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '400 16px "DM Sans", sans-serif';
+    ctx.fillText(ovs(s2), RX + BW - 20, sY + 72);
+    ctx.textAlign = 'left';
+
+    // Status
+    if (m.status) {
+      ctx.fillStyle = '#EF4444'; ctx.font = '600 14px "DM Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(m.status, LW + (W - LW) / 2, curY + SCORE_H - 18);
+      ctx.textAlign = 'left';
+    }
+    curY += SCORE_H + 40;
+  }
+
+  // Context label
+  ctx.fillStyle = '#FBBF24'; ctx.font = '700 14px "DM Sans", sans-serif';
+  ctx.fillText((context || '').toUpperCase(), RX, curY);
+  curY += 26;
+
+  // Dadi commentary bubble
+  ctx.fillStyle = '#8B1A1A';
+  _iplRoundRect(ctx, RX, curY, BW, dBH, 18); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(RX + 18, curY + dBH);
+  ctx.lineTo(RX - 10, curY + dBH + 16);
+  ctx.lineTo(RX + 46, curY + dBH);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.font = '600 ' + dFS + 'px "DM Sans", sans-serif';
+  dLines.forEach((l, i) => ctx.fillText(l, RX + BPX, curY + BPY + dFS + i * dLH));
+  curY += dBH + 28;
+
+  // Dadi label
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '400 18px "DM Sans", sans-serif';
+  ctx.fillText('\u2014 Dadi \U0001F475\U0001F3FE', RX, curY);
+
+  // Footer brand right
+  ctx.fillStyle = '#FF4D00'; ctx.font = '700 18px "DM Sans", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('MYDADI.IN/IPL', W - PAD, H - 28);
+  ctx.textAlign = 'left';
+
+  return canvas.toDataURL('image/png');
+}
+
+async function shareReaction(text, context) {
+  document.getElementById('ipl-share-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'ipl-share-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  const canNative = !!navigator.canShare;
+  modal.innerHTML = `
+    <div style="background:rgba(26,10,10,0.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(220,80,80,0.2);border-radius:20px;padding:24px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:15px;font-weight:700;color:#ff9999;font-family:'DM Sans',sans-serif;">Share Dadi's Roast</span>
+        <button id="ipl-share-close" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:22px;cursor:pointer;line-height:1;">&#x2715;</button>
+      </div>
+      <div id="ipl-share-gen" style="padding:30px;text-align:center;color:#ff9999;font-family:'DM Sans',sans-serif;">Generating image...</div>
+      <div id="ipl-share-img-wrap" style="display:none;margin-bottom:14px;border-radius:12px;overflow:hidden;"></div>
+      <div id="ipl-share-btns" style="display:none;flex-direction:column;gap:10px;">
+        ${canNative ? '<button id="ipl-share-native" style="padding:13px;border-radius:10px;background:linear-gradient(135deg,#8B1A1A 0%,#c0392b 100%);color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;width:100%;font-family:\'DM Sans\',sans-serif;box-shadow:0 4px 14px rgba(139,26,26,0.4);">&#x2B06;&#xFE0F; Share...</button>' : ''}
+        <button id="ipl-share-dl" style="padding:13px;border-radius:10px;background:rgba(139,26,26,0.3);border:1px solid rgba(220,80,80,0.3);color:#fff;font-weight:700;font-size:14px;cursor:pointer;width:100%;font-family:'DM Sans',sans-serif;">&#x2B07; Download Image</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button id="ipl-share-copy" style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.07);color:#fff;font-weight:600;font-size:13px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;font-family:'DM Sans',sans-serif;">&#x1F4CB; Copy Image</button>
+          <button id="ipl-share-wa" style="padding:12px;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:13px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;">&#x1F4AC; WhatsApp</button>
+        </div>
+      </div>
+      <div id="ipl-share-status" style="text-align:center;font-size:13px;color:#4ade80;margin-top:10px;font-family:'DM Sans',sans-serif;"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#ipl-share-close').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  let dataUrl = null;
+  try {
+    dataUrl = await generateIPLShareCard(text, context, currentScoreData);
+    const img = document.createElement('img');
+    img.src = dataUrl; img.style.cssText = 'width:100%;border-radius:8px;display:block;';
+    modal.querySelector('#ipl-share-img-wrap').appendChild(img);
+    modal.querySelector('#ipl-share-gen').style.display = 'none';
+    modal.querySelector('#ipl-share-img-wrap').style.display = 'block';
+    modal.querySelector('#ipl-share-btns').style.display = 'flex';
+  } catch(e) {
+    modal.querySelector('#ipl-share-gen').textContent = 'Could not generate image.';
+  }
+
+  modal.querySelector('#ipl-share-native')?.addEventListener('click', async () => {
+    if (!dataUrl) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'dadi-ipl.png', { type: 'image/png' });
+      await navigator.share(navigator.canShare({ files: [file] }) ? { files: [file], title: 'Dadi ka IPL', url: 'https://www.mydadi.in/ipl' } : { title: 'Dadi ka IPL', url: 'https://www.mydadi.in/ipl' });
+    } catch(_) {}
+  });
+
+  modal.querySelector('#ipl-share-dl').addEventListener('click', () => {
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = 'dadi-ipl.png'; a.click();
+  });
+
+  modal.querySelector('#ipl-share-copy').addEventListener('click', async () => {
+    if (!dataUrl) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      modal.querySelector('#ipl-share-status').textContent = '\u2713 Copied to clipboard!';
+    } catch(_) { modal.querySelector('#ipl-share-status').textContent = 'Copy not supported on this browser.'; }
+  });
+
+  modal.querySelector('#ipl-share-wa').addEventListener('click', () => {
+    window.open('https://wa.me/?text=' + encodeURIComponent('"' + text + '" \u2014 Dadi on ' + context + '\n\nmydadi.in/ipl'), '_blank');
+  });
+}
+
+function renderScoreboard(data) {
+  currentScoreData = data;
+  const sb = document.getElementById('scoreboard');
+  const liveDot = document.getElementById('live-dot');
+  const liveText = document.getElementById('live-text');
+
+  if (!data.matches || !data.matches.length) {
+    sb.innerHTML = '<div class="no-match-box"><p>Abhi koi IPL match nahi chal raha.<br>Dadi chai pi rahi hain.</p></div>';
+    liveDot.style.background = '#6B7280';
+    liveText.textContent = 'IPL 2026';
+    return;
+  }
+
+  const m = data.matches[0];
+  const teams = m.teams || [];
+  const scores = m.score || [];
+  const isLive = m.matchStarted && !m.matchEnded;
+
+  liveDot.style.background = isLive ? '#EF4444' : '#6B7280';
+  liveText.textContent = isLive ? 'LIVE \u2022 IPL 2026' : 'IPL 2026';
+
+  // Map score by innings — match full team name prefix first
+  const scoreMap = {};
+  scores.forEach(s => {
+    const inning = (s.inning || '').toLowerCase();
+    const matched = teams.find(t => inning.startsWith(t.toLowerCase()));
+    scoreMap[matched || s.inning.split(' ')[0]] = s;
+  });
+
+  const t1 = teams[0] || 'Team 1';
+  const t2 = teams[1] || 'Team 2';
+  const s1 = scoreMap[t1] || scoreMap[Object.keys(scoreMap)[0]] || {};
+  const s2 = scoreMap[t2] || scoreMap[Object.keys(scoreMap)[1]] || {};
+
+  const fmt = (s) => s.r !== undefined ? s.r + '/' + s.w : '--';
+  const overs = (s) => s.o !== undefined ? '(' + s.o + ' ov)' : '';
+  const col1 = scores.length > 0 ? '#ffb3b3' : 'rgba(255,255,255,0.6)';
+  const col2 = scores.length > 1 ? '#EF4444' : 'rgba(255,255,255,0.6)';
+
+  sb.innerHTML = `
+    <div class="scores">
+      <div style="text-align:left">
+        <div class="team-name">${t1}</div>
+        <div class="team-score" style="color:${col1}">${fmt(s1)}</div>
+        <div class="team-overs">${overs(s1)}</div>
+      </div>
+      <div class="vs">vs</div>
+      <div style="text-align:right">
+        <div class="team-name">${t2}</div>
+        <div class="team-score" style="color:${col2}">${fmt(s2)}</div>
+        <div class="team-overs">${overs(s2)}</div>
+      </div>
+    </div>
+    <div class="match-name-display">${m.name || ''}</div>
+    <div class="match-status">${m.status || ''}</div>
+    <div class="match-venue">${m.venue || ''}</div>
+  `;
+}
+
+function renderReactions(commentary) {
+  const el = document.getElementById('reactions');
+  if (!commentary || !commentary.length) {
+    el.innerHTML = '<div class="error-box">Dadi abhi kuch nahi bol rahi. Thodi der mein aao.</div>';
+    return;
+  }
+  el.innerHTML = commentary.map(r => `
+    <div class="reaction-card" onclick="shareReaction(${JSON.stringify(r.reaction).replace(/"/g, '&quot;')}, ${JSON.stringify(r.context).replace(/"/g, '&quot;')})">
+      <div class="reaction-context">${r.context || ''}</div>
+      <div class="reaction-text">"${r.reaction || ''}"</div>
+      <div class="copy-hint"><span style="color:#ff9999;font-weight:600;">&#x1F4F2; Tap to share as image</span><span style="font-size:12px">\u2192</span></div>
+    </div>
+  `).join('');
+}
+
+function renderPointsTable(table) {
+  const el = document.getElementById('points-section');
+  if (!table || !table.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="points-table">
+      <h3>IPL Points Table</h3>
+      ${table.slice(0, 10).map(r => `
+        <div class="pt-row">
+          <span class="pt-team">${r.team}</span>
+          <span class="pt-stats">P${r.p} W${r.w} L${r.l}</span>
+          <span class="pt-pts">${r.pts} pts</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function fetchData(force) {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Soch rahi hai...';
+  isRefreshing = true;
+
+  try {
+    // Step 1: fetch live score immediately — no LLM wait
+    const scoreRes = await fetch('/ipl/score');
+    if (scoreRes.ok) {
+      const scoreData = await scoreRes.json();
+      renderScoreboard(scoreData);
+      renderPointsTable(scoreData.points_table);
+      lastOversSnapshot = scoreData.overs_snapshot || '';
+    }
+
+    // Step 2: fetch Dadi's commentary (LLM call, may take a moment)
+    document.getElementById('reactions').innerHTML = '<div class="loading-box">Dadi soch rahi hai...</div>';
+    const url = '/ipl/data' + (force ? '?force=1' : '');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+
+    renderScoreboard(data);
+    renderReactions(data.commentary);
+    renderPointsTable(data.points_table);
+    lastOversSnapshot = data.overs_snapshot || '';
+  } catch(e) {
+    console.error('[IPL]', e);
+    document.getElementById('reactions').innerHTML = '<div class="error-box">Network error. Dadi ka signal thoda weak hai.</div>';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Aur sunao';
+  isRefreshing = false;
+}
+
+function refreshData() { fetchData(true); }
+
+// Initial load
+fetchData(false);
+
+// Auto-refresh every 2 minutes; only re-render if overs changed
+setInterval(async () => {
+  if (isRefreshing) return;
+  try {
+    const res = await fetch('/ipl/data');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.overs_snapshot !== lastOversSnapshot) {
+      renderScoreboard(data);
+      renderReactions(data.commentary);
+      renderPointsTable(data.points_table);
+      lastOversSnapshot = data.overs_snapshot || '';
+    } else {
+      // Still update scoreboard status (might have changed without overs changing)
+      renderScoreboard(data);
+    }
+  } catch(e) {}
+}, 120000);
+</script>
+</body>
+</html>
