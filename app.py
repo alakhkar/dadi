@@ -993,7 +993,7 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
 .match-venue{font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px}
 .match-name-display{font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px;font-weight:500}
 .content{padding:0 16px 40px;max-width:500px;margin:0 auto}
-.section-header{display:flex;justify-content:space-between;align-items:center;margin:-30px 0 20px}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:-30px 0 20px;position:relative;z-index:1}
 .section-title{font-family:'Tiro Devanagari Hindi',serif;font-size:22px;color:#fff}
 .refresh-btn{padding:8px 16px;border-radius:10px;border:none;background:#FBBF24;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
 .refresh-btn:disabled{background:rgba(251,191,36,0.2);color:#FBBF24;cursor:default}
