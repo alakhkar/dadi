@@ -977,7 +977,7 @@ self.addEventListener('fetch', e => {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0A0A0A;font-family:'DM Sans',sans-serif;color:#fff;min-height:100vh}
-.hero{background:linear-gradient(180deg,#7F1D1D 0%,#450a0a 60%,#0A0A0A 100%);padding:40px 20px 60px;text-align:center;position:relative;overflow:hidden}
+.hero{background:linear-gradient(180deg,#7F1D1D 0%,#450a0a 60%,#0A0A0A 100%);padding:40px 20px 32px;text-align:center;position:relative;overflow:hidden}
 .live-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);border-radius:100px;padding:6px 16px;margin-bottom:16px}
 .live-dot{width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1.5s infinite}
 .live-text{font-size:12px;color:#FBBF24;font-weight:600;letter-spacing:1px}
@@ -993,7 +993,7 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
 .match-venue{font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px}
 .match-name-display{font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px;font-weight:500}
 .content{padding:0 16px 40px;max-width:500px;margin:0 auto}
-.section-header{display:flex;justify-content:space-between;align-items:center;margin:-30px 0 20px}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:24px 0 20px}
 .section-title{font-family:'Tiro Devanagari Hindi',serif;font-size:22px;color:#fff}
 .refresh-btn{padding:8px 16px;border-radius:10px;border:none;background:#FBBF24;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
 .refresh-btn:disabled{background:rgba(251,191,36,0.2);color:#FBBF24;cursor:default}
