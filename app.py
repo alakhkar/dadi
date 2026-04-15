@@ -76,7 +76,7 @@ if LLM_PROVIDER == "novita":
 elif LLM_PROVIDER == "deepseek":
     from langchain_openai import ChatOpenAI
     LLM = ChatOpenAI(
-        model="deepseek-ai/DeepSeek-V3:novita",
+        model="deepseek-ai/DeepSeek-V3:together",
         api_key=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
         base_url="https://router.huggingface.co/v1",
         temperature=0.8,
@@ -101,6 +101,20 @@ else:
         streaming=True,
     )
     print("[LLM] Using Groq (llama-3.3-70b-versatile)")
+
+# Groq fallback — used when the primary provider returns a balance/auth error
+_LLM_GROQ_FALLBACK = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    api_key=GROQ_API_KEY,
+    temperature=0.8,
+    streaming=True,
+) if LLM_PROVIDER != "groq" else None
+
+
+def _is_balance_error(exc: Exception) -> bool:
+    """Return True for provider errors that indicate an empty wallet / quota exhausted."""
+    msg = str(exc).lower()
+    return any(k in msg for k in ("not_enough_balance", "insufficient_quota", "balance", "402", "403"))
 
 # ─────────────────────────────────────────────
 # 4. SUPABASE REST HELPERS
@@ -1712,9 +1726,9 @@ async def on_message(message: cl.Message):
             llm_msgs = [SystemMessage(content=story_system)] + history_msgs + [HumanMessage(content=user_text)]
 
             # Collect full response (no streaming — must split before displaying)
-            async def _collect_story():
+            async def _collect_story(llm_instance=None):
                 nonlocal full_reply
-                async for chunk in LLM.astream(llm_msgs):
+                async for chunk in (llm_instance or LLM).astream(llm_msgs):
                     full_reply += chunk.content
 
             try:
@@ -1723,6 +1737,16 @@ async def on_message(message: cl.Message):
                 print("[LLM] Story stream timed out")
                 if not full_reply:
                     full_reply = "Arre beta, Dadi thak gayi — story baad mein sunao. Abhi dobara poocho!"
+            except Exception as story_err:
+                if _is_balance_error(story_err) and _LLM_GROQ_FALLBACK:
+                    print(f"[LLM] Balance error on story, falling back to Groq: {story_err}")
+                    full_reply = ""
+                    try:
+                        await asyncio.wait_for(_collect_story(_LLM_GROQ_FALLBACK), timeout=60.0)
+                    except Exception:
+                        full_reply = "Arre beta, Dadi thak gayi — story baad mein sunao. Abhi dobara poocho!"
+                else:
+                    raise
 
             raw_chapters = [c.strip() for c in full_reply.split("<<<CHAPTER>>>") if c.strip()]
             while len(raw_chapters) < 3:
@@ -1739,9 +1763,9 @@ async def on_message(message: cl.Message):
         else:
             llm_msgs = [SystemMessage(content=base_system)] + history_msgs + [HumanMessage(content=user_text)]
 
-            async def _stream_reply():
+            async def _stream_reply(llm_instance=None):
                 nonlocal full_reply
-                async for chunk in LLM.astream(llm_msgs):
+                async for chunk in (llm_instance or LLM).astream(llm_msgs):
                     full_reply += chunk.content
                     await msg.stream_token(chunk.content)
 
@@ -1752,9 +1776,22 @@ async def on_message(message: cl.Message):
                 if not full_reply:
                     full_reply = "*Arre beta*, Dadi ka connection thoda slow hai. Ek baar phir poocho!"
                     await msg.stream_token(full_reply)
+            except Exception as primary_err:
+                if _is_balance_error(primary_err) and _LLM_GROQ_FALLBACK:
+                    print(f"[LLM] Balance error on primary provider, falling back to Groq: {primary_err}")
+                    full_reply = ""
+                    try:
+                        await asyncio.wait_for(_stream_reply(_LLM_GROQ_FALLBACK), timeout=50.0)
+                    except Exception as fallback_err:
+                        print(f"[LLM] Groq fallback also failed: {fallback_err}")
+                        full_reply = "*Arre beta*, Dadi thodi pareshan hai abhi. Thodi der baad aana!"
+                        await msg.stream_token(full_reply)
+                else:
+                    raise
 
     except Exception as e:
-        full_reply = f"*Arre!* Something went wrong beta. (Error: {e})"
+        print(f"[LLM] Unhandled error: {e}")
+        full_reply = "*Arre beta*, Dadi thodi pareshan hai abhi. Thodi der baad aana!"
         await msg.stream_token(full_reply)
 
     image_path = _pick_dadi_image(user_text, full_reply)
