@@ -6,3 +6,6 @@ __pycache__/
 .chainlit/*
 !.chainlit/config.toml
 *.log
+.claude/
+=3.10.0
+CLAUDE.md

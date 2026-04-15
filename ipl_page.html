@@ -119,19 +119,6 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
 .hl-label{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:4px}
 .hl-value{font-size:22px;font-weight:800}
 .hl-sub{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px}
-.points-table{margin-top:24px}
-.points-table h3{font-family:'Tiro Devanagari Hindi',serif;font-size:18px;color:#fff;margin:0 0 14px}
-.pt-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:10px 14px;
-  background:rgba(255,255,255,0.03);
-  border:1px solid rgba(255,255,255,0.05);
-  border-radius:8px;margin-bottom:6px;font-size:13px;transition:background 0.15s;
-}
-.pt-row:hover{background:rgba(255,255,255,0.07)}
-.pt-team{font-weight:600;color:rgba(255,255,255,0.9)}
-.pt-stats{color:rgba(255,255,255,0.4);font-size:12px}
-.pt-pts{font-weight:700;color:#ff9999;min-width:30px;text-align:right}
 /* CTA box — red glass, matches login button palette */
 .cta-box{
   margin-top:32px;
@@ -201,7 +188,6 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
       <div class="loading-box">Dadi soch rahi hai...</div>
     </div>
     <div id="highlights-section"></div>
-    <div id="points-section"></div>
     <div class="cta-box">
       <div style="font-size:28px">&#x1F475;&#x1F3FE;</div>
       <h3>Dadi se baat karo</h3>
@@ -579,23 +565,6 @@ function renderReactions(commentary) {
   `).join('');
 }
 
-function renderPointsTable(table) {
-  const el = document.getElementById('points-section');
-  if (!table || !table.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div class="points-table">
-      <h3>IPL Points Table</h3>
-      ${table.slice(0, 10).map(r => `
-        <div class="pt-row">
-          <span class="pt-team">${r.team}</span>
-          <span class="pt-stats">P${r.p} W${r.w} L${r.l}</span>
-          <span class="pt-pts">${r.pts} pts</span>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
 async function fetchData(force) {
   const btn = document.getElementById('refresh-btn');
   btn.disabled = true;
@@ -607,9 +576,7 @@ async function fetchData(force) {
     const scoreRes = await fetch('/ipl/score');
     if (scoreRes.ok) {
       const scoreData = await scoreRes.json();
-      renderScoreboard(scoreData);
-      renderPointsTable(scoreData.points_table);
-      lastOversSnapshot = scoreData.overs_snapshot || '';
+      renderScoreboard(scoreData);      lastOversSnapshot = scoreData.overs_snapshot || '';
     }
 
     // Step 2: fetch Dadi's commentary (LLM call, may take a moment)
@@ -647,9 +614,7 @@ setInterval(async () => {
     const data = await res.json();
     if (data.overs_snapshot !== lastOversSnapshot) {
       renderScoreboard(data);
-      renderReactions(data.commentary);
-      renderPointsTable(data.points_table);
-      lastOversSnapshot = data.overs_snapshot || '';
+      renderReactions(data.commentary);      lastOversSnapshot = data.overs_snapshot || '';
     } else {
       // Still update scoreboard status (might have changed without overs changing)
       renderScoreboard(data);
