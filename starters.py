@@ -13,7 +13,8 @@ STARTER_SETS = [
         ("🪔 Next festival pe ghar kaise sajaun?",            "Next festival pe ghar kaise sajaun?"),
         ("😂 Dadi, kuch funny sunao na",                      "Dadi, kuch funny sunao na"),
         ("💼 Job change karni chahiye ya nahi?",              "Job change karni chahiye ya nahi?"),
-        
+        ("🏏 IPL mein kaun jeet raha hai aajkal?",            "IPL mein kaun jeet raha hai aajkal? Latest match ka haal batao."),
+
     ],
     [   # Set B
         ("🔥 Roast me, Dadi!",                                "Roast me, Dadi!"),
@@ -23,7 +24,8 @@ STARTER_SETS = [
         ("😤 Mummy se jhagda ho gaya",                        "Mummy se jhagda ho gaya"),
         ("🧠 Exam stress ho raha hai, kya karun?",            "Exam stress ho raha hai, kya karun?"),
         ("😄 Dadi, apne zamane ki koi masti wali baat batao", "Dadi, apne zamane ki koi masti wali baat batao"),
-        
+        ("🏏 Aaj ka IPL match kaisa raha, Dadi?",             "Aaj ka IPL match kaisa raha? Score kya tha, kaun jeeta?"),
+
     ],
     [   # Set C
         ("🔥 Roast me, Dadi!",                                "Roast me, Dadi!"),
@@ -33,7 +35,8 @@ STARTER_SETS = [
         ("🥘 Guests aa rahe hain, kya banau?",                "Guests aa rahe hain, kya banau?"),
         ("🪷 Dadi, pooja mein mann kaise lagaun?",            "Dadi, pooja mein mann kaise lagaun?"),
         ("😊 Aaj mera din bahut accha gaya, sunogi?",         "Aaj mera din bahut accha gaya, sunogi?"),
-        
+        ("🏏 IPL points table mein kaun aage hai?",           "IPL points table mein kaun aage hai? Aur kaun si team sabse kharaab chal rahi hai?"),
+
     ],
     [   # Set D
         ("🔥 Roast me, Dadi!",                                "Roast me, Dadi!"),
@@ -43,6 +46,7 @@ STARTER_SETS = [
         ("👨‍👩‍👧 Joint family mein adjust kaise karun?",          "Joint family mein adjust kaise karun?"),
         ("🎉 Diwali ki taiyaari kaise karun?",                "Diwali ki taiyaari kaise karun?"),
         ("🤔 Dadi, ek baat batao — pyaar kya hota hai?",      "Dadi, ek baat batao — pyaar kya hota hai?"),
-        
+        ("🏏 Dadi, IPL dekhti ho? Kaun si team pasand hai?",  "Dadi, IPL dekhti ho? Kaun si team pasand hai aur abhi standings mein kaun aage hai?"),
+
     ],
 ]

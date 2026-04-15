@@ -171,11 +171,61 @@ _CRICKET_TTL   = 120  # seconds
 _IPL_DATA_CACHE: dict        = {"data": None, "ts": 0.0}
 _IPL_COMMENTARY_CACHE: dict  = {"commentary": [], "overs_snapshot": "", "ts": 0.0}
 _CRICKET_KEYWORDS = {
-    "cricket", "ipl", "match", "score", "wicket", "batting", "bowling",
+    # ── General cricket terms ──────────────────────────────────────────────
+    "cricket", "match", "score", "wicket", "batting", "bowling",
     "runs", "t20", "test", "odi", "innings", "over", "boundary", "six",
-    "rcb", "csk", "mi", "kkr", "srh", "dc", "pbks", "rr", "gt", "lsg",
-    "virat", "rohit", "dhoni", "bumrah", "player of the match",
-    "india won", "india lost", "team india", "points table", "standings", "latest scores"
+    "four", "century", "fifty", "half-century", "duck", "hat-trick",
+    "yorker", "bouncer", "spinner", "pacer", "fast bowler", "all-rounder",
+    "fielding", "catch", "stumping", "runout", "lbw", "no ball", "wide",
+    "powerplay", "death overs", "drs", "review", "pitch report",
+    "toss", "chase", "target", "required run rate", "net run rate", "nrr",
+    "player of the match", "man of the match",
+    "india won", "india lost", "team india", "points table", "standings", "latest scores",
+
+    # ── IPL ───────────────────────────────────────────────────────────────
+    "ipl", "indian premier league", "tata ipl", "ipl 2025",
+    "auction", "mega auction", "retention", "impact player",
+    "playoffs", "qualifier", "eliminator", "final", "super over",
+
+    # ── IPL franchises (full names + abbreviations) ────────────────────────
+    "rcb", "royal challengers", "royal challengers bengaluru", "royal challengers bangalore",
+    "csk", "chennai super kings",
+    "mi", "mumbai indians",
+    "kkr", "kolkata knight riders",
+    "srh", "sunrisers hyderabad",
+    "dc", "delhi capitals",
+    "pbks", "punjab kings",
+    "rr", "rajasthan royals",
+    "gt", "gujarat titans",
+    "lsg", "lucknow super giants",
+
+    # ── Indian batters ────────────────────────────────────────────────────
+    "virat", "virat kohli", "rohit", "rohit sharma", "shubman", "shubman gill",
+    "yashasvi", "yashasvi jaiswal", "shreyas", "shreyas iyer",
+    "kl rahul", "rahul", "suryakumar", "suryakumar yadav", "sky",
+    "ruturaj", "ruturaj gaikwad", "devdutt", "devdutt padikkal",
+    "abhishek sharma", "riyan parag", "tilak varma", "rinku singh",
+    "sanju", "sanju samson", "hardik", "hardik pandya",
+    "axar", "axar patel", "ravindra jadeja", "jadeja",
+    "dinesh karthik", "ishan kishan", "prithvi shaw",
+
+    # ── Indian bowlers ────────────────────────────────────────────────────
+    "bumrah", "jasprit bumrah", "siraj", "mohammed siraj",
+    "shami", "mohammed shami", "arshdeep", "arshdeep singh",
+    "kuldeep", "kuldeep yadav", "yuzvendra chahal", "chahal",
+    "ravichandran ashwin", "ashwin", "shardul", "shardul thakur",
+    "deepak chahar", "mohit sharma", "prasidh krishna",
+    "varun chakravarthy", "mystery spinner",
+
+    # ── Prominent overseas IPL players ───────────────────────────────────
+    "dhoni", "ms dhoni", "warner", "david warner",
+    "de villiers", "ab de villiers", "maxwell", "glenn maxwell",
+    "buttler", "jos buttler", "rashid", "rashid khan",
+    "mitchell starc", "starc", "pat cummins", "cummins",
+    "andre russell", "russell", "sunil narine", "narine",
+    "tim david", "nicholas pooran", "pooran", "phil salt",
+    "faf du plessis", "faf", "quinton de kock",
+    "travis head", "head", "heinrich klaasen", "klaasen",
 }
 
 def _is_cricket_query(text: str) -> bool:
