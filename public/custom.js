@@ -1283,4 +1283,185 @@
   injectButtons();
 
 
+  /* ── Sidebar: Topics panel (top half) + History (bottom half) ── */
+
+  const _SIDEBAR_TOPICS = [
+    { label: "🔥 Roast me, Dadi!",              prompt: "Roast me, Dadi!" },
+    { label: "😟 Feeling low today",             prompt: "Dadi, I'm feeling low today" },
+    { label: "💔 Dil toot gaya",                 prompt: "Dadi, dil toot gaya hai" },
+    { label: "😔 Akela feel ho raha",            prompt: "Bahut akela feel ho raha hai" },
+    { label: "🍳 Easy recipe chahiye",           prompt: "Kuch easy aur tasty banana hai, kya banau?" },
+    { label: "🎓 Padhai mein mann nahi",         prompt: "Padhai mein mann nahi lag raha" },
+    { label: "🧠 Exam stress",                   prompt: "Exam stress ho raha hai, kya karun?" },
+    { label: "💼 Job change karni chahiye?",     prompt: "Job change karni chahiye ya nahi?" },
+    { label: "🎯 Life mein direction chahiye",   prompt: "Life mein kya karna hai samajh nahi aa raha" },
+    { label: "💪 Motivate karo na",              prompt: "Himmat toot rahi hai, kuch motivating bolo" },
+    { label: "😤 Mummy se jhagda",              prompt: "Mummy se jhagda ho gaya" },
+    { label: "🫣 Shaadi ki baat kar rahe",       prompt: "Ghar wale shaadi ki baat kar rahe hain" },
+    { label: "🏏 IPL update",                    prompt: "IPL mein kaun jeet raha hai aajkal? Latest match ka haal batao." },
+    { label: "🙏 Koi kahani sunao",              prompt: "Aaj koi acchi kahani sunao, Ramayana ya Mahabharata se" },
+    { label: "😂 Kuch funny sunao",             prompt: "Dadi, kuch funny sunao na" },
+    { label: "🤔 Pyaar kya hota hai?",          prompt: "Dadi, ek baat batao — pyaar kya hota hai?" },
+  ];
+
+  /* Inject sidebar layout CSS once — lives in <head>, survives React re-renders */
+  (function () {
+    if (document.getElementById('dadi-sidebar-css')) return;
+    const s = document.createElement('style');
+    s.id = 'dadi-sidebar-css';
+    s.textContent = `
+      /* Split sidebar content into two equal halves */
+      [data-sidebar="content"] {
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        height: 100% !important;
+        padding: 0 !important;
+        gap: 0 !important;
+      }
+      /* Topics panel — top 50% */
+      #dadi-topics-panel {
+        flex: 0 0 50% !important;
+        max-height: 50% !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        border-bottom: 1px solid rgba(139,26,26,0.18) !important;
+        background: rgba(139,26,26,0.03) !important;
+        padding: 6px 0 10px !important;
+        scrollbar-width: thin !important;
+        scrollbar-color: rgba(139,26,26,0.25) transparent !important;
+      }
+      #dadi-topics-panel::-webkit-scrollbar { width: 4px; }
+      #dadi-topics-panel::-webkit-scrollbar-track { background: transparent; }
+      #dadi-topics-panel::-webkit-scrollbar-thumb { background: rgba(139,26,26,0.25); border-radius: 99px; }
+      /* History section — bottom 50% */
+      #dadi-history-wrap {
+        flex: 0 0 50% !important;
+        max-height: 50% !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin !important;
+        scrollbar-color: rgba(139,26,26,0.2) transparent !important;
+      }
+      #dadi-history-wrap::-webkit-scrollbar { width: 4px; }
+      #dadi-history-wrap::-webkit-scrollbar-track { background: transparent; }
+      #dadi-history-wrap::-webkit-scrollbar-thumb { background: rgba(139,26,26,0.2); border-radius: 99px; }
+      /* Topics header label */
+      .dadi-topics-header {
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        color: rgba(139,26,26,0.6) !important;
+        padding: 4px 14px 6px !important;
+        user-select: none !important;
+      }
+      /* History header label */
+      .dadi-history-header {
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        color: rgba(100,80,60,0.55) !important;
+        padding: 8px 14px 4px !important;
+        user-select: none !important;
+      }
+      /* Individual topic item */
+      .dadi-topic-item {
+        display: block !important;
+        width: 100% !important;
+        padding: 6px 14px !important;
+        font-size: 0.8rem !important;
+        line-height: 1.35 !important;
+        color: #2d1a10 !important;
+        cursor: pointer !important;
+        border: none !important;
+        background: none !important;
+        text-align: left !important;
+        border-radius: 0 !important;
+        transition: background 0.12s !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .dadi-topic-item:hover {
+        background: rgba(139,26,26,0.08) !important;
+        color: #8B1A1A !important;
+      }
+    `;
+    document.head.appendChild(s);
+  })();
+
+  /* Send a prompt by filling the textarea and submitting */
+  function _sendTopicPrompt(prompt) {
+    const textarea = document.querySelector('textarea');
+    if (!textarea) return;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(textarea, prompt);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.focus();
+    setTimeout(() => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', code: 'Enter', keyCode: 13,
+        bubbles: true, cancelable: true
+      }));
+    }, 80);
+  }
+
+  /* Build and inject the topics panel + history wrapper */
+  function _injectTopicsSidebar() {
+    if (isLoginPage()) return;
+
+    const content = document.querySelector('[data-sidebar="content"]');
+    if (!content) return;
+
+    /* ── Topics panel ── */
+    if (!document.getElementById('dadi-topics-panel')) {
+      const panel = document.createElement('div');
+      panel.id = 'dadi-topics-panel';
+
+      const header = document.createElement('div');
+      header.className = 'dadi-topics-header';
+      header.textContent = 'Baatein karo';
+      panel.appendChild(header);
+
+      _SIDEBAR_TOPICS.forEach(({ label, prompt }) => {
+        const btn = document.createElement('button');
+        btn.className = 'dadi-topic-item';
+        btn.textContent = label;
+        btn.title = label;
+        btn.addEventListener('click', () => {
+          _sendTopicPrompt(prompt);
+          gtag('event', 'sidebar_topic_clicked', { topic: label });
+        });
+        panel.appendChild(btn);
+      });
+
+      content.insertBefore(panel, content.firstChild);
+    }
+
+    /* ── History wrapper: wraps all existing non-panel children ── */
+    if (!document.getElementById('dadi-history-wrap')) {
+      const wrap = document.createElement('div');
+      wrap.id = 'dadi-history-wrap';
+
+      const histHeader = document.createElement('div');
+      histHeader.className = 'dadi-history-header';
+      histHeader.textContent = 'Purani baatein';
+      wrap.appendChild(histHeader);
+
+      // Move all existing children (except the topics panel) into the wrap
+      const children = Array.from(content.children).filter(c => c.id !== 'dadi-topics-panel' && c.id !== 'dadi-history-wrap');
+      children.forEach(c => wrap.appendChild(c));
+      content.appendChild(wrap);
+    }
+  }
+
+  const _sidebarObs = new MutationObserver(() => _injectTopicsSidebar());
+  _sidebarObs.observe(document.body, { childList: true, subtree: true });
+  _injectTopicsSidebar();
+
+
 })();
