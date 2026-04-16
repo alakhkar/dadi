@@ -531,6 +531,8 @@ async def _get_ipl_commentary(match_data: dict, force: bool = False) -> list[dic
             _IPL_COMMENTARY_CACHE["overs_snapshot"]  = overs_snapshot
             _IPL_COMMENTARY_CACHE["ts"]              = now
             return parsed
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         print(f"[IPL] Commentary LLM failed: {e}")
 
@@ -1062,22 +1064,30 @@ self.addEventListener('fetch', e => {
                 })
             if request.url.path == "/ipl/data":
                 print("[IPL] /ipl/data hit")
-                force_refresh = request.query_params.get("force", "0") == "1"
-                match_data = await _get_ipl_match_data()
-                commentary = await _get_ipl_commentary(match_data or {}, force=force_refresh)
-                snap_parts = []
-                if match_data:
-                    for m in match_data.get("matches", []):
-                        for s in m.get("score", []):
-                            snap_parts.append(f"{s.get('inning','')[:10]}:{s.get('o','')}")
-                payload = {
-                    "matches":        (match_data or {}).get("matches", []),
-                    "points_table":   (match_data or {}).get("points_table", []),
-                    "commentary":     commentary,
-                    "overs_snapshot": "|".join(snap_parts),
-                    "fetched_at":     int(time.time()),
-                }
-                return JSONResponse(payload)
+                try:
+                    force_refresh = request.query_params.get("force", "0") == "1"
+                    match_data = await _get_ipl_match_data()
+                    commentary = await _get_ipl_commentary(match_data or {}, force=force_refresh)
+                    snap_parts = []
+                    if match_data:
+                        for m in match_data.get("matches", []):
+                            for s in m.get("score", []):
+                                snap_parts.append(f"{s.get('inning','')[:10]}:{s.get('o','')}")
+                    payload = {
+                        "matches":        (match_data or {}).get("matches", []),
+                        "points_table":   (match_data or {}).get("points_table", []),
+                        "commentary":     commentary,
+                        "overs_snapshot": "|".join(snap_parts),
+                        "fetched_at":     int(time.time()),
+                    }
+                    return JSONResponse(payload)
+                except Exception as e:
+                    print(f"[IPL] /ipl/data handler error: {e}")
+                    return JSONResponse({
+                        "matches": [], "points_table": [],
+                        "commentary": _IPL_PRESET_REACTIONS,
+                        "overs_snapshot": "", "fetched_at": int(time.time()),
+                    })
             if request.url.path == "/ipl/debug":
                 # Raw CricAPI response for debugging
                 cricapi_key = os.environ.get("CRICAPI_KEY", "")
