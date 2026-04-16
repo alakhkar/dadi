@@ -536,7 +536,13 @@ async def _get_ipl_commentary(match_data: dict, force: bool = False) -> list[dic
     except Exception as e:
         print(f"[IPL] Commentary LLM failed: {e}")
 
-    return _IPL_COMMENTARY_CACHE["commentary"] or _IPL_PRESET_REACTIONS
+    # Only use cached commentary if it was generated for the same match state.
+    # Returning stale commentary from a different match would cause a score/commentary
+    # mismatch in the share card (new match scores + old match commentary).
+    if (_IPL_COMMENTARY_CACHE["commentary"]
+            and _IPL_COMMENTARY_CACHE["overs_snapshot"] == overs_snapshot):
+        return _IPL_COMMENTARY_CACHE["commentary"]
+    return _IPL_PRESET_REACTIONS
 
 
 async def _web_search(query: str, max_results: int = 3) -> list[dict]:
