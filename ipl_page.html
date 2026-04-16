@@ -589,7 +589,6 @@ async function fetchData(force) {
 
     renderScoreboard(data);
     renderReactions(data.commentary);
-    renderPointsTable(data.points_table);
     lastOversSnapshot = data.overs_snapshot || '';
   } catch(e) {
     console.error('[IPL]', e);
