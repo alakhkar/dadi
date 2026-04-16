@@ -221,6 +221,7 @@ h1{font-family:'Tiro Devanagari Hindi',serif;font-size:36px;color:#fff;margin:0 
 let lastOversSnapshot = '';
 let isRefreshing = false;
 let currentScoreData = null;
+let currentCommentaryScoreData = null; // score data from the same fetch that produced the current commentary
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -452,7 +453,7 @@ async function shareReaction(text, context) {
 
   let dataUrl = null;
   try {
-    dataUrl = await generateIPLShareCard(text, context, currentScoreData);
+    dataUrl = await generateIPLShareCard(text, context, currentCommentaryScoreData || currentScoreData);
     const img = document.createElement('img');
     img.src = dataUrl; img.style.cssText = 'width:100%;border-radius:8px;display:block;';
     modal.querySelector('#ipl-share-img-wrap').appendChild(img);
@@ -551,7 +552,8 @@ function renderScoreboard(data) {
   `;
 }
 
-function renderReactions(commentary) {
+function renderReactions(commentary, scoreData) {
+  if (scoreData !== undefined) currentCommentaryScoreData = scoreData;
   const el = document.getElementById('reactions');
   if (!commentary || !commentary.length) {
     el.innerHTML = '<div class="error-box">Dadi abhi kuch nahi bol rahi. Thodi der mein aao.</div>';
@@ -588,7 +590,7 @@ async function fetchData(force) {
     const data = await res.json();
 
     renderScoreboard(data);
-    renderReactions(data.commentary);
+    renderReactions(data.commentary, data);
     lastOversSnapshot = data.overs_snapshot || '';
   } catch(e) {
     console.error('[IPL]', e);
@@ -614,7 +616,7 @@ setInterval(async () => {
     const data = await res.json();
     if (data.overs_snapshot !== lastOversSnapshot) {
       renderScoreboard(data);
-      renderReactions(data.commentary);      lastOversSnapshot = data.overs_snapshot || '';
+      renderReactions(data.commentary, data);      lastOversSnapshot = data.overs_snapshot || '';
     } else {
       // Still update scoreboard status (might have changed without overs changing)
       renderScoreboard(data);
