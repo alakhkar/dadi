@@ -208,7 +208,7 @@ def register_share_card_route(app) -> None:
 
 async def send_share_card_action(question: str, response: str) -> None:
     """
-    Call this after Dadi replies to offer a share card button in the chat.
+    Call this after Dadi replies to offer a share card link in the chat.
     """
     import chainlit as cl
     import urllib.parse
@@ -219,13 +219,6 @@ async def send_share_card_action(question: str, response: str) -> None:
     )
 
     await cl.Message(
-        content="",
-        actions=[
-            cl.Action(
-                name="share_card",
-                label="🪴 Share this as a card",
-                url=url,
-                description="Open your Dadi share card",
-            )
-        ],
+        content=f"[🪴 Share this as a card]({url})",
+        author="Dadi 👵🏾",
     ).send()
