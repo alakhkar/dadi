@@ -1282,6 +1282,15 @@
   new MutationObserver(injectButtons).observe(document.body, { childList: true, subtree: true });
   injectButtons();
 
+  /* ── Share-card link: open in new tab (Chainlit SPA would intercept relative links) ── */
+  document.body.addEventListener('click', e => {
+    const a = e.target.closest('a[href*="/share-card"]');
+    if (!a) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(a.href, '_blank', 'noopener');
+  }, true);
+
 
   /* ── Sidebar: Topics panel (top half) + History (bottom half) ── */
 
