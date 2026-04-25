@@ -26,6 +26,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from starters import STARTER_SETS
 from calendar_context import get_calendar_context
 import analytics
+from share_card_integration import register_share_card_route, send_share_card_action
 
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
@@ -841,6 +842,8 @@ try:
             return JSONResponse({"error": "Could not send email, please check the address"}, status_code=500)
         asyncio.create_task(analytics.log_otp_requested(email))
         return JSONResponse({"ok": True})
+
+    register_share_card_route(_cl_app)
 
     @_cl_app.post("/auth/analytics-data")
     async def analytics_data(request: Request):
@@ -1866,6 +1869,8 @@ async def on_message(message: cl.Message):
     msg.elements = elements
 
     await msg.update()
+    # Share card
+    await send_share_card_action(user_text, full_reply)
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
 
@@ -1993,6 +1998,8 @@ async def on_roast_me(action: cl.Action):
 
     msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     await msg.update()
+    # Share card
+    await send_share_card_action("Roast me, Dadi!", full_roast)
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
     messages.append({"role": "assistant", "content": full_roast})
