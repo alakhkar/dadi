@@ -625,7 +625,7 @@ async function refreshScore() {
   btn.disabled = true;
   btn.classList.add('spinning');
   try {
-    const res = await fetch('/ipl/score');
+    const res = await fetch('/ipl/score?force=1');
     if (res.ok) {
       const data = await res.json();
       renderScoreboard(data);

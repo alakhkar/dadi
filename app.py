@@ -1056,6 +1056,8 @@ self.addEventListener('fetch', e => {
             if request.url.path == "/ipl/score":
                 # Live score only — no LLM, fast response
                 print("[IPL] /ipl/score hit")
+                if request.query_params.get("force", "0") == "1":
+                    _IPL_DATA_CACHE["ts"] = 0  # bust cache so fresh data is fetched
                 match_data = await _get_ipl_match_data()
                 snap_parts = []
                 if match_data:
