@@ -26,7 +26,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from starters import STARTER_SETS
 from calendar_context import get_calendar_context
 import analytics
-from share_card_integration import register_share_card_route, send_share_card_action
+from share_card_integration import register_share_card_route
 
 # ─────────────────────────────────────────────
 # 1. ENV / SECRETS
@@ -1869,8 +1869,16 @@ async def on_message(message: cl.Message):
     msg.elements = elements
 
     await msg.update()
-    # Share card
-    await send_share_card_action(user_text, full_reply)
+    # Share card — send PNG inline so SPA routing doesn't interfere
+    try:
+        _card_bytes = _generate_share_card(full_reply, user_text)
+        await cl.Message(
+            content="🪴 *Share karo, beta!* Save the image below.",
+            elements=[cl.Image(content=_card_bytes, name="dadi-share-card.png", display="inline")],
+            author="Dadi 👵🏾",
+        ).send()
+    except Exception:
+        pass
     messages.append({"role": "assistant", "content": full_reply})
     cl.user_session.set("messages", messages)
 
@@ -1998,8 +2006,16 @@ async def on_roast_me(action: cl.Action):
 
     msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
     await msg.update()
-    # Share card
-    await send_share_card_action("Roast me, Dadi!", full_roast)
+    # Share card — send PNG inline
+    try:
+        _card_bytes = _generate_share_card(full_roast, "Roast me, Dadi!")
+        await cl.Message(
+            content="🪴 *Share karo, beta!* Save the image below.",
+            elements=[cl.Image(content=_card_bytes, name="dadi-share-card.png", display="inline")],
+            author="Dadi 👵🏾",
+        ).send()
+    except Exception:
+        pass
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
     messages.append({"role": "assistant", "content": full_roast})
