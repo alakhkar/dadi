@@ -1283,11 +1283,11 @@
   injectButtons();
 
   /* ── Share-card link: open in new tab (Chainlit SPA would intercept relative links) ── */
-  document.body.addEventListener('click', e => {
+  window.addEventListener('click', e => {
     const a = e.target.closest('a[href*="/share-card"]');
     if (!a) return;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     window.open(a.href, '_blank', 'noopener');
   }, true);
 
