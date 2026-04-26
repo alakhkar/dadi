@@ -1757,16 +1757,16 @@ async def _stream_with_marker_filter(stream_iter, msg: "cl.Message"):
 
 def _strip_banger_marker(text: str) -> tuple[str, bool]:
     """Detect & strip the trailing <<<BANGER>>> sentinel emitted by Dadi when
-    she lands a screenshot-worthy one-liner. Returns (cleaned_text, was_banger).
-    Tolerant to trailing whitespace/punctuation that might slip in around the
-    marker. Conservative: only treat as banger if the message is short enough
-    to actually fit on a 9:16 share card (≤ 280 chars after cleanup)."""
+    she lands a screenshot-worthy joke (1-3 sentences applying one of the
+    Comedy Mastery Lessons). Returns (cleaned_text, was_banger). Tolerant to
+    trailing whitespace/punctuation around the marker. Defence-in-depth length
+    cap (≤ 320 chars) catches runaway markers on long advice/story replies
+    where Dadi forgot the eligibility rules."""
     if BANGER_MARKER not in text:
         return text, False
     cleaned = re.sub(re.escape(BANGER_MARKER) + r"[\s.!?]*$", "", text).rstrip()
-    # Defence-in-depth: also scrub any stray markers anywhere in the body.
     cleaned = cleaned.replace(BANGER_MARKER, "").rstrip()
-    if len(cleaned) > 280:
+    if len(cleaned) > 320:
         return cleaned, False
     return cleaned, True
 
