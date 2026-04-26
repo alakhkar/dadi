@@ -39,3 +39,12 @@ a[href*="/share"],
 [data-testid="share-button"] {
   display: none !important;
 }
+
+/* Pulse animation for the auto-attached "Share this on Instagram" banger CTA.
+   Plays once when the button appears so the eye catches it; intercepted
+   client-side in custom.js to open the meme modal in 9:16 mode. */
+@keyframes dadi-pulse {
+  0%   { transform: scale(1);    box-shadow: 0 2px 8px  rgba(139,26,26,0.25); }
+  50%  { transform: scale(1.04); box-shadow: 0 4px 18px rgba(255,77,0,0.55); }
+  100% { transform: scale(1);    box-shadow: 0 2px 8px  rgba(139,26,26,0.25); }
+}

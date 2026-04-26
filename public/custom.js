@@ -780,12 +780,20 @@
     '/public/images/dadi tea.png',
   ];
 
-  async function _generateMeme(text, imgSrc) {
+  // 1:1 (square) for chat/WhatsApp; 9:16 (1080x1920) for Instagram Reels/Stories.
+  // 9:16 carries a "— Dadi" byline + extra bottom safe-area for IG Story UI chrome.
+  const _MEME_ASPECT_CFG = {
+    '1:1':  { W: 1080, H: 1080, PAD: 44, startFontSize: 96,  safeBottom: 44,  wmFont: 26, wmStroke: 3, wmY: 44,  byline: false },
+    '9:16': { W: 1080, H: 1920, PAD: 64, startFontSize: 128, safeBottom: 220, wmFont: 36, wmStroke: 4, wmY: 130, byline: true },
+  };
+
+  async function _generateMeme(text, imgSrc, aspect) {
     await _ensureKalam();
     await document.fonts.ready;
-    const SIZE = 1080;
+    const cfg = _MEME_ASPECT_CFG[aspect === '9:16' ? '9:16' : '1:1'];
+    const { W, H, PAD, startFontSize, safeBottom, wmFont, wmStroke, wmY, byline } = cfg;
     const canvas = document.createElement('canvas');
-    canvas.width = SIZE; canvas.height = SIZE;
+    canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
     // Draw Dadi image as cover-fill background
@@ -793,9 +801,9 @@
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
-        const scale = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight);
+        const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
         const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-        ctx.drawImage(img, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
+        ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
         URL.revokeObjectURL(url);
         resolve();
       };
@@ -803,16 +811,15 @@
       img.src = url;
     })).catch(() => {
       ctx.fillStyle = '#FDF6F0';
-      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.fillRect(0, 0, W, H);
     });
 
     // Text lives in the bottom third — scale font to fill that zone
-    const PAD = 44;
-    const maxW = SIZE - PAD * 2;
+    const maxW = W - PAD * 2;
     const memeText = _cleanText(text);
-    const BOTTOM_THIRD_H = Math.floor(SIZE / 3) - PAD; // ~316px
+    const BOTTOM_THIRD_H = Math.floor(H / 3) - PAD;
 
-    let fontSize = 96, lines;
+    let fontSize = startFontSize, lines;
     while (fontSize >= 18) {
       ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
       lines = _wrapText(ctx, memeText, maxW);
@@ -822,14 +829,14 @@
     }
 
     const lh = Math.round(fontSize * 1.25);
-    let y = SIZE - PAD - (lines.length - 1) * lh;
+    let y = H - safeBottom - (lines.length - 1) * lh;
 
     // Gradient covers the bottom third of the image
-    const grad = ctx.createLinearGradient(0, SIZE * 0.58, 0, SIZE);
+    const grad = ctx.createLinearGradient(0, H * 0.58, 0, H);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
     grad.addColorStop(1, 'rgba(0,0,0,0.88)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.fillRect(0, 0, W, H);
 
     ctx.font = `700 ${fontSize}px 'Kalam', cursive`;
     ctx.textAlign = 'center';
@@ -838,28 +845,39 @@
     ctx.strokeStyle = '#000';
 
     lines.forEach(line => {
-      ctx.strokeText(line, SIZE / 2, y);
+      ctx.strokeText(line, W / 2, y);
       ctx.fillStyle = '#fff';
-      ctx.fillText(line, SIZE / 2, y);
+      ctx.fillText(line, W / 2, y);
       y += lh;
     });
 
+    if (byline) {
+      const bylineSize = Math.max(36, Math.round(fontSize * 0.45));
+      ctx.font = `700 ${bylineSize}px 'Kalam', cursive`;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillStyle = '#FF4D00';
+      ctx.strokeText('— Dadi', W / 2, y + 24);
+      ctx.fillText('— Dadi', W / 2, y + 24);
+    }
+
     // Watermark top-right
-    ctx.font = `700 26px 'Kalam', cursive`;
-    ctx.lineWidth = 3;
+    ctx.font = `700 ${wmFont}px 'Kalam', cursive`;
+    ctx.lineWidth = wmStroke;
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.fillStyle = '#FF4D00';
     ctx.textAlign = 'right';
-    ctx.strokeText('MYDADI.IN', SIZE - 20, 44);
-    ctx.fillText('MYDADI.IN', SIZE - 20, 44);
+    ctx.strokeText('MYDADI.IN', W - 24, wmY);
+    ctx.fillText('MYDADI.IN', W - 24, wmY);
 
     return canvas.toDataURL('image/png');
   }
 
-  function showMemeModal(rawDadiText) {
+  function showMemeModal(rawDadiText, defaultAspect) {
     document.getElementById('dadi-meme-modal')?.remove();
     const text = _cleanText(rawDadiText);
     let currentIdx = Math.floor(Math.random() * _MEME_IMAGES.length);
+    let currentAspect = defaultAspect === '9:16' ? '9:16' : '1:1';
     let _memeDataUrl = null;
 
     const modal = document.createElement('div');
@@ -872,7 +890,11 @@
           <button class="dadi-share-x" id="dm-close">✕</button>
         </div>
         <div class="dadi-share-generating" id="dm-generating">Generating meme…</div>
-        <div class="dadi-share-img-wrap" id="dm-img-wrap" style="display:none"></div>
+        <div class="dadi-share-img-wrap" id="dm-img-wrap"></div>
+        <div id="dm-aspect" style="display:flex;gap:8px;justify-content:center;margin:8px 0 6px;">
+          <button class="dadi-aspect-btn" data-aspect="1:1" style="padding:4px 12px;border-radius:14px;border:1.5px solid transparent;background:#f2ede8;font-size:12px;cursor:pointer;font-weight:600;">⬛ 1:1 Square</button>
+          <button class="dadi-aspect-btn" data-aspect="9:16" style="padding:4px 12px;border-radius:14px;border:1.5px solid transparent;background:#f2ede8;font-size:12px;cursor:pointer;font-weight:600;">📲 9:16 Reels</button>
+        </div>
         <div id="dm-picker" style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;"></div>
         <div class="dadi-share-grid" id="dm-btns" style="display:none">
           ${navigator.canShare ? '<button class="dadi-share-opt primary dadi-share-grid-wide" id="dm-native">⬆️ Share Meme…</button>' : ''}
@@ -884,6 +906,24 @@
       </div>`;
 
     document.body.appendChild(modal);
+
+    // 9:16 canvases are 1920px tall — cap preview so it fits the modal viewport.
+    modal.querySelector('#dm-img-wrap').style.cssText = 'display:none;max-height:70vh;overflow:auto;text-align:center;';
+
+    // Aspect toggle UI: highlight current, swap on click
+    const aspectBtns = modal.querySelectorAll('.dadi-aspect-btn');
+    const paintAspectBtns = () => {
+      aspectBtns.forEach(b => {
+        const active = b.dataset.aspect === currentAspect;
+        b.style.borderColor = active ? '#8B1A1A' : 'transparent';
+        b.style.background = active ? '#fff' : '#f2ede8';
+        b.style.color = active ? '#8B1A1A' : '#2d1a10';
+      });
+    };
+    aspectBtns.forEach(b => {
+      b.onclick = () => { currentAspect = b.dataset.aspect; paintAspectBtns(); generate(); };
+    });
+    paintAspectBtns();
 
     // Image picker thumbnails
     const picker = modal.querySelector('#dm-picker');
@@ -913,9 +953,10 @@
       wrap.style.display = 'none'; btns.style.display = 'none';
       gen.style.display = 'flex'; gen.textContent = 'Generating meme…';
       try {
-        _memeDataUrl = await _generateMeme(text, _MEME_IMAGES[currentIdx]);
+        _memeDataUrl = await _generateMeme(text, _MEME_IMAGES[currentIdx], currentAspect);
         const img = document.createElement('img');
         img.src = _memeDataUrl; img.alt = 'Dadi meme';
+        img.style.cssText = 'max-width:100%;max-height:70vh;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:8px;';
         wrap.innerHTML = ''; wrap.appendChild(img);
         gen.style.display = 'none';
         wrap.style.display = 'block';
@@ -1238,9 +1279,35 @@
 
   const _memeInjected  = new WeakSet();
   const _shareInjected = new WeakSet();
+  const _bangerInjected = new WeakSet();
 
   function injectButtons() {
     if (isLoginPage()) return;
+
+    // ── Banger CTA: intercept Chainlit's "📲 Share this on Instagram" Action
+    //    button (server-attached when Dadi flags a banger). Open the meme
+    //    modal in 9:16 mode directly, no server roundtrip needed. ──
+    document.querySelectorAll('[data-step-type="assistant_message"] button').forEach(btn => {
+      if (_bangerInjected.has(btn)) return;
+      const lbl = (btn.innerText || btn.textContent || '').trim();
+      if (!lbl.includes('Share this on Instagram')) return;
+      _bangerInjected.add(btn);
+      // Make it visually pop — this is the viral CTA
+      btn.style.cssText += ';background:linear-gradient(135deg,#FF4D00,#8B1A1A);color:#fff;font-weight:700;border:none;box-shadow:0 2px 8px rgba(139,26,26,0.25);animation:dadi-pulse 2.4s ease-in-out 1;';
+      // Capture-phase listener so we beat Chainlit's own click handler
+      btn.addEventListener('click', e => {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        const step = btn.closest('[data-step-type="assistant_message"]');
+        const text = step
+          ? Array.from(step.querySelectorAll('[role="article"]'))
+              .map(a => (a.innerText || a.textContent || '').trim())
+              .filter(Boolean).join('\n\n')
+          : '';
+        if (text) showMemeModal(text, '9:16');
+        try { gtag('event', 'banger_share_open', { source: 'auto_cta' }); } catch (_) {}
+      }, true);
+    });
 
     // ── Meme: one button per paragraph [role="article"] inside assistant steps ──
     document.querySelectorAll('[data-step-type="assistant_message"] [role="article"]').forEach(article => {

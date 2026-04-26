@@ -21,7 +21,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.documents import Document
-from prompt import DADI_SYSTEM_PROMPT, STORY_CHAPTER_ADDON, ONBOARDING_ADDON
+from prompt import DADI_SYSTEM_PROMPT, STORY_CHAPTER_ADDON, ONBOARDING_ADDON, BANGER_MARKER
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from starters import STARTER_SETS
 from calendar_context import get_calendar_context
@@ -1721,6 +1721,81 @@ async def on_resume(thread: dict):
     cl.user_session.set("is_first_time", False)
 
 
+async def _stream_with_marker_filter(stream_iter, msg: "cl.Message"):
+    """Stream tokens to `msg` while transparently swallowing the trailing
+    BANGER_MARKER. We hold back the last len(marker) chars of the stream as a
+    rolling buffer so the sentinel never flashes on screen between the final
+    chunk and the post-stream msg.update() that strips it.
+
+    Returns the full accumulated reply (with the marker still in place — the
+    caller uses _strip_banger_marker() on this to also detect & re-clean)."""
+    full = ""
+    held = ""
+    BUF_N = len(BANGER_MARKER)
+    async for chunk in stream_iter:
+        token = chunk.content
+        full += token
+        combined = held + token
+        if len(combined) > BUF_N:
+            emit = combined[:-BUF_N]
+            held = combined[-BUF_N:]
+            # If a complete marker landed inside the safe zone (rare — would
+            # mean Dadi emitted text after the marker), scrub it before display.
+            if BANGER_MARKER in emit:
+                emit = emit.replace(BANGER_MARKER, "")
+            if emit:
+                await msg.stream_token(emit)
+        else:
+            held = combined
+    # Flush the held tail, stripping the trailing marker if present.
+    tail = re.sub(re.escape(BANGER_MARKER) + r"[\s.!?]*$", "", held)
+    tail = tail.replace(BANGER_MARKER, "")
+    if tail:
+        await msg.stream_token(tail)
+    return full
+
+
+def _strip_banger_marker(text: str) -> tuple[str, bool]:
+    """Detect & strip the trailing <<<BANGER>>> sentinel emitted by Dadi when
+    she lands a screenshot-worthy one-liner. Returns (cleaned_text, was_banger).
+    Tolerant to trailing whitespace/punctuation that might slip in around the
+    marker. Conservative: only treat as banger if the message is short enough
+    to actually fit on a 9:16 share card (≤ 280 chars after cleanup)."""
+    if BANGER_MARKER not in text:
+        return text, False
+    cleaned = re.sub(re.escape(BANGER_MARKER) + r"[\s.!?]*$", "", text).rstrip()
+    # Defence-in-depth: also scrub any stray markers anywhere in the body.
+    cleaned = cleaned.replace(BANGER_MARKER, "").rstrip()
+    if len(cleaned) > 280:
+        return cleaned, False
+    return cleaned, True
+
+
+def _banger_share_action() -> "cl.Action":
+    """The CTA button attached to messages flagged as bangers. Click is
+    intercepted client-side by custom.js to open the meme modal in 9:16
+    (Instagram Reels/Story) mode — the server-side callback only fires as a
+    fallback when JS is unavailable, and it just removes the button."""
+    return cl.Action(
+        name="share_banger",
+        payload={"aspect": "9:16"},
+        label="📲 Share this on Instagram",
+    )
+
+
+def _apply_banger_share_cta(msg: "cl.Message", full_text: str) -> str:
+    """If `full_text` contains the BANGER sentinel, strip it from `msg.content`
+    and attach the share CTA. Returns the cleaned text (or `full_text`
+    unchanged when no banger was detected) so the caller can persist the
+    correct version into the conversation history."""
+    cleaned, is_banger = _strip_banger_marker(full_text)
+    if is_banger:
+        msg.content = cleaned
+        msg.actions = [_banger_share_action()]
+        return cleaned
+    return full_text
+
+
 @cl.on_message
 async def on_message(message: cl.Message):
     user_text = message.content
@@ -1831,9 +1906,9 @@ async def on_message(message: cl.Message):
 
             async def _stream_reply(llm_instance=None):
                 nonlocal full_reply
-                async for chunk in (llm_instance or LLM).astream(llm_msgs):
-                    full_reply += chunk.content
-                    await msg.stream_token(chunk.content)
+                full_reply = await _stream_with_marker_filter(
+                    (llm_instance or LLM).astream(llm_msgs), msg
+                )
 
             try:
                 await asyncio.wait_for(_stream_reply(), timeout=50.0)
@@ -1864,6 +1939,8 @@ async def on_message(message: cl.Message):
     elements = [cl.Image(path=image_path, name="dadi", display="inline")]
 
     msg.elements = elements
+
+    full_reply = _apply_banger_share_cta(msg, full_reply)
 
     await msg.update()
     messages.append({"role": "assistant", "content": full_reply})
@@ -1928,6 +2005,18 @@ async def on_next_chapter(action: cl.Action):
     await action.remove()
 
 
+@cl.action_callback("share_banger")
+async def on_share_banger(action: cl.Action):
+    """Server-side fallback for the 'Share this on Instagram' CTA.
+
+    The intended flow is fully client-side: custom.js intercepts clicks on the
+    button and opens the meme modal in 9:16 mode without any server roundtrip.
+    This callback only fires if JS is unavailable or the listener didn't bind
+    in time — in which case we silently remove the action so the user isn't
+    stuck staring at a button that does nothing on the next click."""
+    await action.remove()
+
+
 @cl.action_callback("daily_optin")
 async def on_daily_optin(action: cl.Action):
     email = cl.user_session.get("email")
@@ -1984,14 +2073,16 @@ async def on_roast_me(action: cl.Action):
             for m in messages[-6:]
         ]
         llm_msgs = [SystemMessage(content=DADI_SYSTEM_PROMPT)] + history_msgs + [HumanMessage(content=roast_prompt)]
-        async for chunk in LLM.astream(llm_msgs):
-            full_roast += chunk.content
-            await msg.stream_token(chunk.content)
+        full_roast = await _stream_with_marker_filter(LLM.astream(llm_msgs), msg)
     except Exception as e:
         full_roast = "Arre beta, roast karte karte mujhe khud hi ghabrahat ho gayi. Phir aana. 😂"
         await msg.stream_token(full_roast)
 
     msg.elements = [cl.Image(path=_DADI_IMAGES["karate"], name="dadi", display="inline")]
+
+    # Explicit roasts are the most common banger source — same CTA path.
+    full_roast = _apply_banger_share_cta(msg, full_roast)
+
     await msg.update()
 
     messages.append({"role": "user",      "content": "[Roast me, Dadi!]"})
