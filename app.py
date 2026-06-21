@@ -76,7 +76,7 @@ if LLM_PROVIDER == "novita":
 elif LLM_PROVIDER == "deepseek":
     from langchain_openai import ChatOpenAI
     LLM = ChatOpenAI(
-        model="deepseek-ai/DeepSeek-V3:together",
+        model="deepseek-ai/DeepSeek-V4-Pro:together",
         api_key=os.environ.get("HUGGINGFACEHUB_API_TOKEN"),
         base_url="https://router.huggingface.co/v1",
         temperature=0.8,
